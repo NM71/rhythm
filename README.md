@@ -1,16 +1,15 @@
-# rhythm
+# Rhythm
 
 A minimalist music player
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+## App Screenshots
 
-A few resources to get you started if this is your first Flutter project:
+![IMG-20240923-WA0008](https://github.com/user-attachments/assets/3542e66a-1ea0-428b-9256-ae8e233dcc67)
+![IMG-20240923-WA0006](https://github.com/user-attachments/assets/56e9a2c1-5766-4537-8424-ba3de06afd2e)
+![IMG-20240923-WA0007](https://github.com/user-attachments/assets/27c8e0f7-9aab-428d-a3d6-4a4976e1df53)
+![IMG-20240923-WA0005](https://github.com/user-attachments/assets/39c44ac1-877e-4b7e-b717-812f813553dc)
+![IMG-20240923-WA0010](https://github.com/user-attachments/assets/de8f504d-850b-4482-884d-ae420fda4be5)
+![IMG-20240923-WA0009](https://github.com/user-attachments/assets/331effa6-6828-4866-98af-f452034c2231)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
