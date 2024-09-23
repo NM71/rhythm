@@ -2,7 +2,11 @@
 
 A minimalist music player
 
-## Getting Started
+## Features
+
+- Simple Minimalistic Design
+- Song Fetching
+- Light/Dark Mode
 
 ## App Screenshots
 
