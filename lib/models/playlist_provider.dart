@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:rhythm/models/playlist.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:rhythm/models/audio_handler.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 enum SortType { title, artist, duration, dateAdded }
 
@@ -43,12 +44,6 @@ class PlaylistProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _permissionGranted = false;
 
-  // ---------------------------------------------------------
-
-  /* 
-  Audio Player Functionality
-*/
-
   // Durations
   Duration _currentDuration = Duration.zero;
   Duration _totalDuration = Duration.zero;
@@ -58,34 +53,119 @@ class PlaylistProvider extends ChangeNotifier {
   bool _isRepeat = false;
   bool _isRepeatOne = false;
 
+  // Hive Box Names
+  static const String _favoritesBox = 'favorites_box';
+  static const String _recentlyPlayedBox = 'recently_played_box';
+  static const String _playlistsBox = 'playlists_box';
+  static const String _settingsBox = 'settings_box';
+  static const String _libraryCacheBox = 'library_cache_box';
+
   // Constructor
   PlaylistProvider({required AudioHandler audioHandler})
     : _audioHandler = audioHandler {
-    if (_audioHandler is MyAudioHandler) {
-      _audioHandler.onSkipToNext = playNextSong;
-      _audioHandler.onSkipToPrevious = playPreviousSong;
+    _initPersistence().then((_) {
+      if (_audioHandler is MyAudioHandler) {
+        _audioHandler.onSkipToNext = playNextSong;
+        _audioHandler.onSkipToPrevious = playPreviousSong;
 
-      _audioHandler.onRepeatModeChanged = (mode) {
-        if (mode == AudioServiceRepeatMode.one) {
-          _isRepeatOne = true;
-          _isRepeat = false;
-        } else if (mode == AudioServiceRepeatMode.all) {
-          _isRepeatOne = false;
-          _isRepeat = true;
-        } else {
-          _isRepeatOne = false;
-          _isRepeat = false;
-        }
-        notifyListeners();
-      };
+        _audioHandler.onRepeatModeChanged = (mode) {
+          if (mode == AudioServiceRepeatMode.one) {
+            _isRepeatOne = true;
+            _isRepeat = false;
+          } else if (mode == AudioServiceRepeatMode.all) {
+            _isRepeatOne = false;
+            _isRepeat = true;
+          } else {
+            _isRepeatOne = false;
+            _isRepeat = false;
+          }
+          notifyListeners();
+        };
 
-      _audioHandler.onShuffleModeChanged = (mode) {
-        _isShuffle = mode == AudioServiceShuffleMode.all;
-        notifyListeners();
-      };
+        _audioHandler.onShuffleModeChanged = (mode) {
+          _isShuffle = mode == AudioServiceShuffleMode.all;
+          notifyListeners();
+        };
+      }
+      listenToDuration();
+      // fetch songs on init is usually managed by UI, but we can call it here too
+      // or rely on the UI calling it after permissions.
+    });
+  }
+
+  Future<void> _initPersistence() async {
+    // Open boxes
+    await Hive.openBox(_favoritesBox);
+    await Hive.openBox(_recentlyPlayedBox);
+    await Hive.openBox(_playlistsBox);
+    await Hive.openBox(_settingsBox);
+    await Hive.openBox(_libraryCacheBox);
+
+    _loadData();
+  }
+
+  void _loadData() {
+    // Load Favorites
+    final favoritesBox = Hive.box(_favoritesBox);
+    _favorites = List<int>.from(favoritesBox.get('ids', defaultValue: []));
+
+    // Load Recently Played
+    final recentBox = Hive.box(_recentlyPlayedBox);
+    final recentItems = recentBox.get('songs', defaultValue: []);
+    _recentlyPlayed = recentItems
+        .map((item) => Song.fromMap(Map.from(item)))
+        .toList()
+        .cast<Song>();
+
+    // Load Playlists
+    final playlistBox = Hive.box(_playlistsBox);
+    final playlistItems = playlistBox.get('items', defaultValue: []);
+    _customPlaylists = playlistItems
+        .map((item) => Playlist.fromMap(Map.from(item)))
+        .toList()
+        .cast<Playlist>();
+
+    // Load Settings
+    final settingsBox = Hive.box(_settingsBox);
+    _minSongDurationMs = settingsBox.get('minDuration', defaultValue: 30000);
+
+    // Load Library Cache
+    final cacheBox = Hive.box(_libraryCacheBox);
+    final cachedSongs = cacheBox.get('songs', defaultValue: []);
+    if (cachedSongs.isNotEmpty) {
+      _playlist = cachedSongs
+          .map((item) => Song.fromMap(Map.from(item)))
+          .toList()
+          .cast<Song>();
     }
-    listenToDuration();
-    // fetch songs on init (called later from UI to ensure context or permissions)
+
+    notifyListeners();
+  }
+
+  void _saveFavorites() {
+    Hive.box(_favoritesBox).put('ids', _favorites);
+  }
+
+  void _saveRecentlyPlayed() {
+    Hive.box(
+      _recentlyPlayedBox,
+    ).put('songs', _recentlyPlayed.map((s) => s.toMap()).toList());
+  }
+
+  void _savePlaylists() {
+    Hive.box(
+      _playlistsBox,
+    ).put('items', _customPlaylists.map((p) => p.toMap()).toList());
+  }
+
+  void _saveSettings() {
+    Hive.box(_settingsBox).put('minDuration', _minSongDurationMs);
+  }
+
+  void _saveLibraryCache() {
+    Hive.box(
+      _libraryCacheBox,
+    ).put('songs', _playlist.map((s) => s.toMap()).toList());
   }
 
   // Request permissions and fetch songs
@@ -129,6 +209,7 @@ class PlaylistProvider extends ChangeNotifier {
               );
             })
             .toList();
+        _saveLibraryCache();
       } else {
         _permissionGranted = false;
       }
@@ -204,7 +285,6 @@ class PlaylistProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // toggle shuffle
   void toggleShuffle() {
     _isShuffle = !_isShuffle;
     notifyListeners();
@@ -400,6 +480,7 @@ class PlaylistProvider extends ChangeNotifier {
     } else {
       _favorites.add(id);
     }
+    _saveFavorites();
     notifyListeners();
   }
 
@@ -409,6 +490,7 @@ class PlaylistProvider extends ChangeNotifier {
 
   void clearFavorites() {
     _favorites.clear();
+    _saveFavorites();
     notifyListeners();
   }
 
@@ -483,6 +565,7 @@ class PlaylistProvider extends ChangeNotifier {
   // Scanning refinements
   void setMinSongDuration(int durationMs) {
     _minSongDurationMs = durationMs;
+    _saveSettings();
     fetchSongs(); // Re-scan with new filter
     notifyListeners();
   }
@@ -506,11 +589,13 @@ class PlaylistProvider extends ChangeNotifier {
     if (_recentlyPlayed.length > 50) {
       _recentlyPlayed.removeLast();
     }
+    _saveRecentlyPlayed();
     notifyListeners();
   }
 
   void clearRecentlyPlayed() {
     _recentlyPlayed.clear();
+    _saveRecentlyPlayed();
     notifyListeners();
   }
 
@@ -654,28 +739,33 @@ class PlaylistProvider extends ChangeNotifier {
       songs: [],
     );
     _customPlaylists.add(newPlaylist);
+    _savePlaylists();
     notifyListeners();
   }
 
   void deletePlaylist(Playlist playlist) {
     _customPlaylists.remove(playlist);
+    _savePlaylists();
     notifyListeners();
   }
 
   void renamePlaylist(Playlist playlist, String newName) {
     playlist.name = newName;
+    _savePlaylists();
     notifyListeners();
   }
 
   void addSongToPlaylist(Song song, Playlist playlist) {
     if (!playlist.songs.contains(song)) {
       playlist.songs.add(song);
+      _savePlaylists();
       notifyListeners();
     }
   }
 
   void removeSongFromPlaylist(Song song, Playlist playlist) {
     playlist.songs.remove(song);
+    _savePlaylists();
     notifyListeners();
   }
 }

@@ -28,4 +28,34 @@ class Song {
     final seconds = ((duration % 60000) ~/ 1000).toString().padLeft(2, '0');
     return '$minutes:$seconds';
   }
+
+  // To Map for JSON/Hive
+  Map<String, dynamic> toMap() {
+    return {
+      'songName': songName,
+      'artistName': artistName,
+      'albumName': albumName,
+      'albumArtImagePath': albumArtImagePath,
+      'audioPath': audioPath,
+      'id': id,
+      'isLocal': isLocal,
+      'duration': duration,
+      'dateAdded': dateAdded,
+    };
+  }
+
+  // From Map
+  factory Song.fromMap(Map<dynamic, dynamic> map) {
+    return Song(
+      songName: map['songName'] ?? '',
+      artistName: map['artistName'] ?? '',
+      albumName: map['albumName'] ?? 'Unknown Album',
+      albumArtImagePath: map['albumArtImagePath'],
+      audioPath: map['audioPath'] ?? '',
+      id: map['id'],
+      isLocal: map['isLocal'] ?? false,
+      duration: map['duration'] ?? 0,
+      dateAdded: map['dateAdded'],
+    );
+  }
 }

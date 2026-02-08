@@ -5,12 +5,17 @@ import 'package:rhythm/pages/splash_page.dart';
 import 'package:rhythm/themes/theme_provider.dart';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:rhythm/models/audio_handler.dart';
 
 late AudioHandler _audioHandler;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Hive
+  await Hive.initFlutter();
+
   _audioHandler = await AudioService.init(
     builder: () => MyAudioHandler(),
     config: const AudioServiceConfig(
