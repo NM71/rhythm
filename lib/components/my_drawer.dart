@@ -51,8 +51,7 @@ class MyDrawer extends StatelessWidget {
               leading: const Icon(Icons.settings),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.push(
-                  context,
+                Navigator.of(context, rootNavigator: true).push(
                   MaterialPageRoute(builder: (context) => const SettingsPage()),
                 );
               },

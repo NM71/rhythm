@@ -106,13 +106,11 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
                           height: 200,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withOpacity(0.1),
+                            color: Theme.of(context).colorScheme.primary
+                                .withAlpha((0.1 * 255).toInt()),
                             border: Border.all(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primary.withOpacity(0.2),
+                              color: Theme.of(context).colorScheme.primary
+                                  .withAlpha((0.2 * 255).toInt()),
                               width: 4,
                             ),
                           ),
@@ -125,9 +123,8 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
                                 color: Theme.of(context).colorScheme.primary,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary.withOpacity(0.3),
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withAlpha((0.3 * 255).toInt()),
                                     blurRadius: 25,
                                     spreadRadius: 5,
                                   ),
@@ -186,9 +183,8 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 15,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.inversePrimary.withOpacity(0.6),
+                          color: Theme.of(context).colorScheme.inversePrimary
+                              .withAlpha((0.6 * 255).toInt()),
                         ),
                       ),
                     ),
@@ -294,7 +290,7 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
                     fontSize: 12,
                     color: Theme.of(
                       context,
-                    ).colorScheme.inversePrimary.withOpacity(0.5),
+                    ).colorScheme.inversePrimary.withAlpha((0.5 * 255).toInt()),
                   ),
                 ),
               ],

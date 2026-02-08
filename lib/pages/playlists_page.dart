@@ -146,7 +146,7 @@ class PlaylistsPage extends StatelessWidget {
           height: 50,
           decoration: BoxDecoration(
             color: (iconColor ?? Theme.of(context).colorScheme.primary)
-                .withOpacity(0.1),
+                .withAlpha((0.1 * 255).toInt()),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, color: iconColor),
@@ -160,7 +160,7 @@ class PlaylistsPage extends StatelessWidget {
                   size: 20,
                   color: Theme.of(
                     context,
-                  ).colorScheme.inversePrimary.withOpacity(0.5),
+                  ).colorScheme.inversePrimary.withAlpha((0.5 * 255).toInt()),
                 ),
                 onPressed: onDelete,
               )
@@ -169,7 +169,7 @@ class PlaylistsPage extends StatelessWidget {
                 size: 16,
                 color: Theme.of(
                   context,
-                ).colorScheme.inversePrimary.withOpacity(0.4),
+                ).colorScheme.inversePrimary.withAlpha((0.4 * 255).toInt()),
               ),
       ),
     );

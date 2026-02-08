@@ -84,53 +84,53 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 32),
 
-          // Library Scanning Section
-          const Text(
-            "Library Scanning",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            context,
-            title: "Manual Scan",
-            subtitle: "Force a refresh of your music library",
-            trailing: Consumer<PlaylistProvider>(
-              builder: (context, provider, child) {
-                return IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: () {
-                    provider.scanSongs();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Library scanned")),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            context,
-            title: "Filter by Duration",
-            subtitle: "Hide short audio files (like notifications)",
-            trailing: Consumer<PlaylistProvider>(
-              builder: (context, provider, child) {
-                return DropdownButton<int>(
-                  value: provider.minSongDurationMs,
-                  underline: const SizedBox(),
-                  onChanged: (value) {
-                    if (value != null) provider.setMinSongDuration(value);
-                  },
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text("Show All")),
-                    DropdownMenuItem(value: 15000, child: Text("> 15s")),
-                    DropdownMenuItem(value: 30000, child: Text("> 30s")),
-                    DropdownMenuItem(value: 60000, child: Text("> 1min")),
-                  ],
-                );
-              },
-            ),
-          ),
+          // // Library Scanning Section
+          // const Text(
+          //   "Library Scanning",
+          //   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          // ),
+          // const SizedBox(height: 16),
+          // _buildSettingsTile(
+          //   context,
+          //   title: "Manual Scan",
+          //   subtitle: "Force a refresh of your music library",
+          //   trailing: Consumer<PlaylistProvider>(
+          //     builder: (context, provider, child) {
+          //       return IconButton(
+          //         icon: const Icon(Icons.refresh),
+          //         onPressed: () {
+          //           provider.scanSongs();
+          //           ScaffoldMessenger.of(context).showSnackBar(
+          //             const SnackBar(content: Text("Library scanned")),
+          //           );
+          //         },
+          //       );
+          //     },
+          //   ),
+          // ),
+          // const SizedBox(height: 16),
+          // _buildSettingsTile(
+          //   context,
+          //   title: "Filter by Duration",
+          //   subtitle: "Hide short audio files (like notifications)",
+          //   trailing: Consumer<PlaylistProvider>(
+          //     builder: (context, provider, child) {
+          //       return DropdownButton<int>(
+          //         value: provider.minSongDurationMs,
+          //         underline: const SizedBox(),
+          //         onChanged: (value) {
+          //           if (value != null) provider.setMinSongDuration(value);
+          //         },
+          //         items: const [
+          //           DropdownMenuItem(value: 0, child: Text("Show All")),
+          //           DropdownMenuItem(value: 15000, child: Text("> 15s")),
+          //           DropdownMenuItem(value: 30000, child: Text("> 30s")),
+          //           DropdownMenuItem(value: 60000, child: Text("> 1min")),
+          //         ],
+          //       );
+          //     },
+          //   ),
+          // ),
           const SizedBox(height: 32),
 
           // Playback History Section
@@ -213,13 +213,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       fontSize: 12,
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withOpacity(0.6),
+                      ).colorScheme.onSurface.withAlpha((0.6 * 255).toInt()),
                     ),
                   ),
               ],
             ),
           ),
-          if (trailing != null) trailing,
+          trailing ?? const SizedBox.shrink(),
         ],
       ),
     );

@@ -21,7 +21,7 @@ Future<void> main() async {
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.ryanheise.rhythm.channel.audio',
       androidNotificationChannelName: 'Rhythm Audio Playback',
-      androidStopForegroundOnPause: true,
+      androidStopForegroundOnPause: false,
     ),
   );
 

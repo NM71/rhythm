@@ -5,10 +5,10 @@ import 'package:rhythm/components/my_drawer.dart';
 import 'package:rhythm/components/song_options_bottom_sheet.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/models/song.dart';
-import 'package:rhythm/pages/song_page.dart';
 import 'package:rhythm/pages/albums_page.dart';
 import 'package:rhythm/pages/artists_page.dart';
 import 'package:rhythm/pages/recently_played_page.dart';
+import 'package:rhythm/components/playing_indicator.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class HomePage extends StatefulWidget {
@@ -41,15 +41,13 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       drawer: const MyDrawer(),
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.surface,
         title: const Text("S O N G S"),
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.library_music_rounded),
             onPressed: () {
-              Navigator.push(
-                context,
+              Navigator.of(context, rootNavigator: true).push(
                 MaterialPageRoute(
                   builder: (context) => const LibraryScanningPage(),
                 ),
@@ -58,17 +56,24 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-      body: Consumer<PlaylistProvider>(
-        builder: (context, value, child) {
-          if (value.isLoading) {
+      body: Selector<PlaylistProvider, (bool, bool, int)>(
+        selector: (_, p) =>
+            (p.isLoading, p.permissionGranted, p.playlist.length),
+        builder: (context, data, child) {
+          final isLoading = data.$1;
+          final permissionGranted = data.$2;
+          final provider = Provider.of<PlaylistProvider>(
+            context,
+            listen: false,
+          );
+
+          if (isLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!value.permissionGranted) {
-            return _buildPermissionDenied(value);
+          if (!permissionGranted) {
+            return _buildPermissionDenied(provider);
           }
-
-          final List<Song> playlist = value.filteredPlaylist;
 
           return Column(
             children: [
@@ -76,9 +81,42 @@ class _HomePageState extends State<HomePage> {
               _buildCategoryChips(context),
 
               // Search and Sort Bar
-              _buildSearchAndSortBar(context, value),
+              _buildSearchAndSortBar(context, provider),
 
-              Expanded(child: _buildMainContent(context, value, playlist)),
+              // Song Count Display
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20.0,
+                  vertical: 8.0,
+                ),
+                child: Row(
+                  children: [
+                    Selector<PlaylistProvider, int>(
+                      selector: (_, p) => p.filteredPlaylist.length,
+                      builder: (context, count, _) {
+                        return Text(
+                          "$count Songs",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.inversePrimary
+                                .withAlpha((0.7 * 255).toInt()),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: Selector<PlaylistProvider, List<Song>>(
+                  selector: (_, p) => p.filteredPlaylist,
+                  builder: (context, playlist, _) {
+                    return _buildMainContent(context, provider, playlist);
+                  },
+                ),
+              ),
             ],
           );
         },
@@ -110,65 +148,84 @@ class _HomePageState extends State<HomePage> {
 
           final Song song = playlist[index];
 
-          return ListTile(
-            leading: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: song.isLocal
-                  ? QueryArtworkWidget(
-                      id: song.id!,
-                      type: ArtworkType.AUDIO,
-                      artworkWidth: 50,
-                      artworkHeight: 50,
-                      artworkFit: BoxFit.cover,
-                      nullArtworkWidget: _buildPlaceholderArt(context),
-                    )
-                  : Image.asset(
-                      song.albumArtImagePath ??
-                          "assets/images/album_artwork_1.png",
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                    ),
-            ),
-            title: Text(
-              song.songName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              song.artistName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  song.formattedDuration,
-                  style: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.6),
+          return Selector<PlaylistProvider, int?>(
+            selector: (_, p) => p.currentSongId,
+            builder: (context, currentSongId, child) {
+              final bool isPlaying = currentSongId == song.id;
+
+              return ListTile(
+                leading: SizedBox(
+                  width: 50,
+                  height: 50,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: song.isLocal
+                        ? QueryArtworkWidget(
+                            key: ValueKey(song.id),
+                            id: song.id!,
+                            type: ArtworkType.AUDIO,
+                            artworkWidth: 50,
+                            artworkHeight: 50,
+                            artworkFit: BoxFit.cover,
+                            nullArtworkWidget: _buildPlaceholderArt(context),
+                          )
+                        : Image.asset(
+                            song.albumArtImagePath ??
+                                "assets/images/album_artwork_1.png",
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                          ),
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.more_vert),
-                  onPressed: () {
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (context) => SongOptionsBottomSheet(song: song),
-                    );
-                  },
+                title: Text(
+                  song.songName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: isPlaying ? FontWeight.bold : FontWeight.normal,
+                    color: isPlaying
+                        ? Theme.of(context).colorScheme.primary
+                        : null,
+                  ),
                 ),
-              ],
-            ),
-            onTap: () {
-              value.loadListIntoQueue(playlist, initialIndex: index);
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SongPage()),
+                subtitle: Text(
+                  "${song.artistName} • ${song.formattedDuration}",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isPlaying
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.primary.withAlpha((0.8 * 255).toInt())
+                        : null,
+                  ),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isPlaying)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 8.0),
+                        child: PlayingIndicator(),
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.more_vert),
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) =>
+                              SongOptionsBottomSheet(song: song),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  value.loadListIntoQueue(playlist, initialIndex: index);
+                },
               );
             },
           );
@@ -287,13 +344,13 @@ class _HomePageState extends State<HomePage> {
                   hintStyle: TextStyle(
                     color: Theme.of(
                       context,
-                    ).colorScheme.inversePrimary.withOpacity(0.5),
+                    ).colorScheme.inversePrimary.withAlpha((0.5 * 255).toInt()),
                   ),
                   prefixIcon: Icon(
                     Icons.search,
                     color: Theme.of(
                       context,
-                    ).colorScheme.inversePrimary.withOpacity(0.5),
+                    ).colorScheme.inversePrimary.withAlpha((0.5 * 255).toInt()),
                   ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -414,7 +471,9 @@ class _HomePageState extends State<HomePage> {
     return Container(
       width: 50,
       height: 50,
-      color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+      color: Theme.of(
+        context,
+      ).colorScheme.primary.withAlpha((0.2 * 255).toInt()),
       child: Icon(
         Icons.music_note,
         color: Theme.of(context).colorScheme.primary,

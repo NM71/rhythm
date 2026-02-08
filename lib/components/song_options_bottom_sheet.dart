@@ -52,6 +52,107 @@ class SongOptionsBottomSheet extends StatelessWidget {
     );
   }
 
+  void _showPlaylistSelector(BuildContext context, PlaylistProvider provider) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(25),
+            topRight: Radius.circular(25),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Add to Playlist",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 15),
+            if (provider.customPlaylists.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text("No playlists created yet."),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: provider.customPlaylists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = provider.customPlaylists[index];
+                    return ListTile(
+                      leading: const Icon(Icons.playlist_play),
+                      title: Text(playlist.name),
+                      trailing: const Icon(Icons.add),
+                      onTap: () {
+                        provider.addSongToPlaylist(song, playlist);
+                        Navigator.pop(context); // close selector
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Added to ${playlist.name}")),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add_box_outlined),
+              title: const Text("Create New Playlist"),
+              onTap: () {
+                Navigator.pop(context); // close selector
+                _showCreatePlaylistDialog(context, provider);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCreatePlaylistDialog(
+    BuildContext context,
+    PlaylistProvider provider,
+  ) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("New Playlist"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: "Enter playlist name"),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                provider.createPlaylist(controller.text);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("Created playlist ${controller.text}"),
+                  ),
+                );
+              }
+            },
+            child: const Text("Create"),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmRemoveFromLibrary(
     BuildContext context,
     PlaylistProvider provider,
@@ -160,7 +261,7 @@ class SongOptionsBottomSheet extends StatelessWidget {
             decoration: BoxDecoration(
               color: Theme.of(
                 context,
-              ).colorScheme.inversePrimary.withOpacity(0.2),
+              ).colorScheme.inversePrimary.withAlpha((0.2 * 255).toInt()),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -198,11 +299,7 @@ class SongOptionsBottomSheet extends StatelessWidget {
             title: const Text("Add to Playlist"),
             onTap: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Playlist management coming soon!"),
-                ),
-              );
+              _showPlaylistSelector(context, provider);
             },
           ),
           ListTile(

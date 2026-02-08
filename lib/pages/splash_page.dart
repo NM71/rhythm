@@ -56,7 +56,7 @@ class _SplashPageState extends State<SplashPage>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Logo
-              Image.asset('assets/rhythm-logo.png', width: 100, height: 100),
+              Image.asset('assets/rhythm-logo-1.png', width: 150, height: 150),
               // const SizedBox(height: 20),
               // // Title
               // Text(

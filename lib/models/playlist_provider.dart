@@ -43,6 +43,7 @@ class PlaylistProvider extends ChangeNotifier {
   // Loading and permission states
   bool _isLoading = false;
   bool _permissionGranted = false;
+  bool _isInitialized = false;
 
   // Durations
   Duration _currentDuration = Duration.zero;
@@ -102,6 +103,8 @@ class PlaylistProvider extends ChangeNotifier {
     await Hive.openBox(_libraryCacheBox);
 
     _loadData();
+    _isInitialized = true;
+    notifyListeners();
   }
 
   void _loadData() {
@@ -170,6 +173,10 @@ class PlaylistProvider extends ChangeNotifier {
 
   // Request permissions and fetch songs
   Future<void> fetchSongs() async {
+    while (!_isInitialized) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
     _isLoading = true;
     notifyListeners();
 
@@ -416,8 +423,9 @@ class PlaylistProvider extends ChangeNotifier {
         playNextSong();
         _queue.removeAt(index);
         // adjust index if needed
-        if (_currentQueueIndex! > index)
+        if (_currentQueueIndex! > index) {
           _currentQueueIndex = _currentQueueIndex! - 1;
+        }
       } else {
         await _audioHandler.stop();
         _queue.clear();
@@ -510,12 +518,21 @@ class PlaylistProvider extends ChangeNotifier {
   bool get isShuffle => _isShuffle;
   bool get isRepeat => _isRepeat;
   bool get isRepeatOne => _isRepeatOne;
-  List<int> get favoriteIds => _favorites;
+  List<int> get favoriteIds => List.from(_favorites);
   bool get isLoading => _isLoading;
   bool get permissionGranted => _permissionGranted;
   String get searchQuery => _searchQuery;
   List<Song> get recentlyPlayed => _recentlyPlayed;
   int get minSongDurationMs => _minSongDurationMs;
+
+  Song? get currentSong =>
+      (_currentQueueIndex != null &&
+          _currentQueueIndex! >= 0 &&
+          _currentQueueIndex! < _queue.length)
+      ? _queue[_currentQueueIndex!]
+      : null;
+
+  int? get currentSongId => currentSong?.id;
 
   // Filtered playlist based on search
   List<Song> get filteredPlaylist {

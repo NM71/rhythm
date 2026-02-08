@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/models/song.dart';
-import 'package:rhythm/pages/song_page.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class AlbumsPage extends StatelessWidget {
@@ -49,9 +48,8 @@ class AlbumsPage extends StatelessWidget {
                           nullArtworkWidget: Container(
                             width: 50,
                             height: 50,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withOpacity(0.2),
+                            color: Theme.of(context).colorScheme.primary
+                                .withAlpha((0.2 * 255).toInt()),
                             child: const Icon(Icons.album),
                           ),
                         )
@@ -77,12 +75,6 @@ class AlbumsPage extends StatelessWidget {
                     trailing: Text(song.formattedDuration),
                     onTap: () {
                       value.loadListIntoQueue(songs, initialIndex: sIndex);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SongPage(),
-                        ),
-                      );
                     },
                   );
                 }).toList(),

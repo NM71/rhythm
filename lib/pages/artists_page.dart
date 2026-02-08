@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/models/song.dart';
-import 'package:rhythm/pages/song_page.dart';
 
 class ArtistsPage extends StatelessWidget {
   const ArtistsPage({super.key});
@@ -36,7 +35,7 @@ class ArtistsPage extends StatelessWidget {
                 leading: CircleAvatar(
                   backgroundColor: Theme.of(
                     context,
-                  ).colorScheme.primary.withOpacity(0.2),
+                  ).colorScheme.primary.withAlpha((0.2 * 255).toInt()),
                   child: Text(
                     artistName.isNotEmpty ? artistName[0].toUpperCase() : '?',
                     style: TextStyle(
@@ -65,12 +64,6 @@ class ArtistsPage extends StatelessWidget {
                     trailing: Text(song.formattedDuration),
                     onTap: () {
                       value.loadListIntoQueue(songs, initialIndex: sIndex);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SongPage(),
-                        ),
-                      );
                     },
                   );
                 }).toList(),

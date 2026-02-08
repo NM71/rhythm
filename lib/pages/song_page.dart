@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/components/neu_box.dart';
 import 'package:rhythm/models/playlist_provider.dart';
+import 'package:rhythm/components/marquee_text.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:rhythm/components/song_options_bottom_sheet.dart';
 import 'package:rhythm/pages/queue_page.dart';
@@ -22,277 +23,374 @@ class SongPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PlaylistProvider>(
-      builder: (context, value, child) {
-        // get queue
-        final queue = value.queue;
+    final provider = Provider.of<PlaylistProvider>(context, listen: false);
 
-        // Handle empty queue or null index
-        if (queue.isEmpty || value.currentQueueIndex == null) {
-          return Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            appBar: AppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-            body: const Center(child: Text("No song selected")),
-          );
-        }
-
-        // get current song
-        final currentSong = queue[value.currentQueueIndex!];
-
-        // return Scaffold UI
-        return Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          body: SafeArea(
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.only(left: 25.0, right: 25, bottom: 25),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // app bar
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // back button
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      // title
-                      const Text("P L A Y I N G   N O W"),
-                      // // queue button
-                      // IconButton(
-                      //   onPressed: () {
-                      //     Navigator.push(
-                      //       context,
-                      //       MaterialPageRoute(
-                      //         builder: (context) => const QueuePage(),
-                      //       ),
-                      //     );
-                      //   },
-                      //   icon: const Icon(Icons.queue_music),
-                      // ),
-                      // menu button
-                      IconButton(
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (context) =>
-                                SongOptionsBottomSheet(song: currentSong),
-                          );
-                        },
-                        icon: const Icon(Icons.more_vert),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 25),
-                  // album art
-                  NeuBox(
-                    child: Column(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 25.0,
+                vertical: 10,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight:
+                      MediaQuery.of(context).size.height -
+                      MediaQuery.of(context).padding.top -
+                      MediaQuery.of(context).padding.bottom -
+                      20,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // app bar
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // image
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: currentSong.isLocal
-                              ? QueryArtworkWidget(
-                                  id: currentSong.id!,
-                                  type: ArtworkType.AUDIO,
-                                  artworkWidth: 300,
-                                  artworkHeight: 300,
-                                  artworkFit: BoxFit.cover,
-                                  nullArtworkWidget: const Icon(
-                                    Icons.music_note,
-                                    size: 200,
-                                  ),
-                                )
-                              : Image.asset(
-                                  currentSong.albumArtImagePath ??
-                                      "assets/images/album_artwork_1.png",
-                                ),
+                        // back button
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back),
+                          onPressed: () => Navigator.pop(context),
                         ),
+                        // title
+                        const Text("P L A Y I N G   N O W"),
+                        // menu button
+                        Selector<PlaylistProvider, int?>(
+                          selector: (_, p) => p.currentQueueIndex,
+                          builder: (context, currentQueueIndex, _) {
+                            if (currentQueueIndex == null ||
+                                provider.queue.isEmpty) {
+                              return const SizedBox(width: 48);
+                            }
+                            final song = provider.queue[currentQueueIndex];
+                            return IconButton(
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (context) =>
+                                      SongOptionsBottomSheet(song: song),
+                                );
+                              },
+                              icon: const Icon(Icons.more_vert),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
 
-                        // song/artist name
-                        Padding(
-                          padding: const EdgeInsets.all(15.0),
-                          child: Row(
-                            mainAxisAlignment: .spaceBetween,
+                    // album art & info
+                    Selector<PlaylistProvider, int?>(
+                      selector: (_, p) => p.currentQueueIndex,
+                      builder: (context, currentQueueIndex, _) {
+                        if (currentQueueIndex == null ||
+                            provider.queue.isEmpty) {
+                          return const Center(child: Text("No song selected"));
+                        }
+                        final currentSong = provider.queue[currentQueueIndex];
+
+                        return NeuBox(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              // song, artist name
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    currentSong.songName,
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    currentSong.artistName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
+                              // image
+                              SizedBox(
+                                width: MediaQuery.of(context).size.width * 0.7,
+                                height: MediaQuery.of(context).size.width * 0.7,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: currentSong.isLocal
+                                      ? QueryArtworkWidget(
+                                          key: ValueKey(currentSong.id),
+                                          id: currentSong.id!,
+                                          type: ArtworkType.AUDIO,
+                                          artworkWidth:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.width *
+                                              0.7,
+                                          artworkHeight:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.width *
+                                              0.7,
+                                          artworkFit: BoxFit.cover,
+                                          nullArtworkWidget: Container(
+                                            width:
+                                                MediaQuery.of(
+                                                  context,
+                                                ).size.width *
+                                                0.7,
+                                            height:
+                                                MediaQuery.of(
+                                                  context,
+                                                ).size.width *
+                                                0.7,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.secondary,
+                                            child: Icon(
+                                              Icons.music_note,
+                                              size:
+                                                  MediaQuery.of(
+                                                    context,
+                                                  ).size.width *
+                                                  0.4,
+                                            ),
+                                          ),
+                                        )
+                                      : Image.asset(
+                                          currentSong.albumArtImagePath ??
+                                              "assets/images/album_artwork_1.png",
+                                          width:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.width *
+                                              0.7,
+                                          height:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.width *
+                                              0.7,
+                                          fit: BoxFit.cover,
+                                        ),
+                                ),
                               ),
-                              // fav icon
-                              IconButton(
-                                onPressed: () {
-                                  value.toggleFavorite(currentSong.id ?? -1);
-                                },
-                                icon: Icon(
-                                  value.isFavorite(currentSong.id ?? -1)
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: Colors.red,
+
+                              // song/artist name
+                              Padding(
+                                padding: const EdgeInsets.all(15.0),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // song, artist name
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          MarqueeText(
+                                            text: currentSong.songName,
+                                            style: const TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          MarqueeText(
+                                            text: currentSong.artistName,
+                                            style: TextStyle(
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // fav icon
+                                    IconButton(
+                                      onPressed: () {
+                                        provider.toggleFavorite(
+                                          currentSong.id ?? -1,
+                                        );
+                                      },
+                                      icon:
+                                          Selector<PlaylistProvider, List<int>>(
+                                            selector: (_, p) => p.favoriteIds,
+                                            builder: (context, favoriteIds, _) {
+                                              return Icon(
+                                                favoriteIds.contains(
+                                                      currentSong.id ?? -1,
+                                                    )
+                                                    ? Icons.favorite
+                                                    : Icons.favorite_border,
+                                                color: Colors.red,
+                                              );
+                                            },
+                                          ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
+                        );
+                      },
+                    ),
+
+                    // song duration slider
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 25.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              // start time
+                              Selector<PlaylistProvider, Duration>(
+                                selector: (_, p) => p.currentDuration,
+                                builder: (context, currentDuration, _) {
+                                  return Text(formatTime(currentDuration));
+                                },
+                              ),
+
+                              // shuffle icon
+                              Selector<PlaylistProvider, bool>(
+                                selector: (_, p) => p.isShuffle,
+                                builder: (context, isShuffle, _) {
+                                  return IconButton(
+                                    onPressed: provider.toggleShuffle,
+                                    icon: Icon(
+                                      Icons.shuffle,
+                                      color: isShuffle
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              ),
+
+                              // queue button
+                              IconButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const QueuePage(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.queue_music),
+                              ),
+
+                              // repeat icon
+                              Selector<PlaylistProvider, (bool, bool)>(
+                                selector: (_, p) => (p.isRepeat, p.isRepeatOne),
+                                builder: (context, repeatState, _) {
+                                  final isRepeat = repeatState.$1;
+                                  final isRepeatOne = repeatState.$2;
+                                  return IconButton(
+                                    onPressed: provider.toggleRepeat,
+                                    icon: Icon(
+                                      isRepeatOne
+                                          ? Icons.repeat_one
+                                          : Icons.repeat,
+                                      color: isRepeat || isRepeatOne
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              ),
+
+                              // end time
+                              Selector<PlaylistProvider, Duration>(
+                                selector: (_, p) => p.totalDuration,
+                                builder: (context, totalDuration, _) {
+                                  return Text(formatTime(totalDuration));
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        Selector<PlaylistProvider, (Duration, Duration)>(
+                          selector: (_, p) =>
+                              (p.currentDuration, p.totalDuration),
+                          builder: (context, durationData, _) {
+                            final currentDuration = durationData.$1;
+                            final totalDuration = durationData.$2;
+                            return SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                thumbShape: const RoundSliderThumbShape(
+                                  enabledThumbRadius: 4,
+                                ),
+                              ),
+                              child: Slider(
+                                value: currentDuration.inSeconds
+                                    .toDouble()
+                                    .clamp(
+                                      0,
+                                      totalDuration.inSeconds.toDouble(),
+                                    ),
+                                min: 0,
+                                max: totalDuration.inSeconds.toDouble(),
+                                activeColor: Theme.of(
+                                  context,
+                                ).colorScheme.primary,
+                                onChanged: (double val) {
+                                  provider.seek(Duration(seconds: val.toInt()));
+                                },
+                                onChangeEnd: (double val) {
+                                  provider.seek(Duration(seconds: val.toInt()));
+                                },
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 25),
-                  // song duration slider
-                  Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 25.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // start/end time
-                            Text(formatTime(value.currentDuration)),
-                            // shuffle icon
-                            Consumer<PlaylistProvider>(
-                              builder: (context, value, child) {
+
+                    // media controls
+                    Row(
+                      children: [
+                        // skip previous
+                        Expanded(
+                          child: NeuBox(
+                            child: IconButton(
+                              onPressed: provider.playPreviousSong,
+                              icon: const Icon(Icons.skip_previous),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 25),
+                        // play/pause
+                        Expanded(
+                          flex: 2,
+                          child: NeuBox(
+                            child: Selector<PlaylistProvider, bool>(
+                              selector: (_, p) => p.isPlaying,
+                              builder: (context, isPlaying, _) {
                                 return IconButton(
-                                  onPressed: value.toggleShuffle,
+                                  onPressed: provider.pauseOrResume,
                                   icon: Icon(
-                                    Icons.shuffle,
-                                    color: value.isShuffle
-                                        ? Theme.of(context).colorScheme.primary
-                                        : null,
+                                    isPlaying ? Icons.pause : Icons.play_arrow,
                                   ),
                                 );
                               },
                             ),
-
-                            // queue button
-                            IconButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const QueuePage(),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.queue_music),
-                            ),
-
-                            // repeat icon
-                            Consumer<PlaylistProvider>(
-                              builder: (context, value, child) {
-                                return IconButton(
-                                  onPressed: value.toggleRepeat,
-                                  icon: Icon(
-                                    value.isRepeatOne
-                                        ? Icons.repeat_one
-                                        : Icons.repeat,
-                                    color: value.isRepeat || value.isRepeatOne
-                                        ? Theme.of(context).colorScheme.primary
-                                        : null,
-                                  ),
-                                );
-                              },
-                            ),
-
-                            // end time
-                            Text(formatTime(value.totalDuration)),
-                          ],
-                        ),
-                      ),
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          thumbShape: RoundSliderThumbShape(
-                            enabledThumbRadius: 4,
                           ),
                         ),
-                        child: Slider(
-                          value: value.currentDuration.inSeconds.toDouble(),
-                          min: 0,
-                          max: value.totalDuration.inSeconds.toDouble(),
-                          activeColor: Theme.of(context).colorScheme.primary,
-                          onChanged: (double double) {
-                            // update current duration while dragging
-                            value.seek(Duration(seconds: double.toInt()));
-                          },
-                          onChangeEnd: (double double) {
-                            // sliding has finished, goto that position in song
-                            value.seek(Duration(seconds: double.toInt()));
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  // media controls
-                  Row(
-                    children: [
-                      // skip previous
-                      Expanded(
-                        child: NeuBox(
-                          child: IconButton(
-                            onPressed: value.playPreviousSong,
-                            icon: const Icon(Icons.skip_previous),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 25),
-                      // play/pause
-                      Expanded(
-                        flex: 2,
-                        child: NeuBox(
-                          child: IconButton(
-                            onPressed: value.pauseOrResume,
-                            icon: Icon(
-                              value.isPlaying ? Icons.pause : Icons.play_arrow,
+                        const SizedBox(width: 20),
+                        // skip forward
+                        Expanded(
+                          child: NeuBox(
+                            child: IconButton(
+                              onPressed: provider.playNextSong,
+                              icon: const Icon(Icons.skip_next),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 20),
-                      // skip forward
-                      Expanded(
-                        child: NeuBox(
-                          child: IconButton(
-                            onPressed: value.playNextSong,
-                            icon: const Icon(Icons.skip_next),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

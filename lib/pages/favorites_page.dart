@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/models/song.dart';
-import 'package:rhythm/pages/song_page.dart';
+import 'package:rhythm/components/playing_indicator.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 
 class FavoritesPage extends StatelessWidget {
@@ -17,9 +17,13 @@ class FavoritesPage extends StatelessWidget {
         title: const Text("F A V O R I T E S"),
         centerTitle: true,
       ),
-      body: Consumer<PlaylistProvider>(
-        builder: (context, value, child) {
-          final List<Song> favorites = value.favoriteSongs;
+      body: Selector<PlaylistProvider, List<Song>>(
+        selector: (_, p) => p.favoriteSongs,
+        builder: (context, favorites, child) {
+          final provider = Provider.of<PlaylistProvider>(
+            context,
+            listen: false,
+          );
 
           // Empty state
           if (favorites.isEmpty) {
@@ -52,55 +56,86 @@ class FavoritesPage extends StatelessWidget {
             itemBuilder: (context, index) {
               final Song song = favorites[index];
 
-              return ListTile(
-                title: Text(
-                  song.songName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  song.artistName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: song.isLocal
-                      ? QueryArtworkWidget(
-                          id: song.id!,
-                          type: ArtworkType.AUDIO,
-                          artworkWidth: 50,
-                          artworkHeight: 50,
-                          artworkFit: BoxFit.cover,
-                          nullArtworkWidget: Container(
-                            width: 50,
-                            height: 50,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.primary.withOpacity(0.2),
-                            child: Icon(
-                              Icons.music_note,
-                              color: Theme.of(context).colorScheme.primary,
+              return Selector<PlaylistProvider, int?>(
+                selector: (_, p) => p.currentSongId,
+                builder: (context, currentSongId, child) {
+                  final bool isPlaying = currentSongId == song.id;
+
+                  return ListTile(
+                    title: Text(
+                      song.songName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: isPlaying
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: isPlaying
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                    ),
+                    subtitle: Text(
+                      "${song.artistName} • ${song.formattedDuration}",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isPlaying
+                            ? Theme.of(context).colorScheme.primary.withAlpha(
+                                (0.8 * 255).toInt(),
+                              )
+                            : null,
+                      ),
+                    ),
+                    leading: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: song.isLocal
+                          ? QueryArtworkWidget(
+                              id: song.id!,
+                              type: ArtworkType.AUDIO,
+                              artworkWidth: 50,
+                              artworkHeight: 50,
+                              artworkFit: BoxFit.cover,
+                              nullArtworkWidget: Container(
+                                width: 50,
+                                height: 50,
+                                color: Theme.of(context).colorScheme.primary
+                                    .withAlpha((0.2 * 255).toInt()),
+                                child: Icon(
+                                  Icons.music_note,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                            )
+                          : Image.asset(
+                              song.albumArtImagePath ??
+                                  "assets/images/album_artwork_1.png",
+                              width: 50,
+                              height: 50,
+                              fit: BoxFit.cover,
                             ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isPlaying)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 8.0),
+                            child: PlayingIndicator(),
                           ),
-                        )
-                      : Image.asset(
-                          song.albumArtImagePath ??
-                              "assets/images/album_artwork_1.png",
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
+                        IconButton(
+                          icon: const Icon(Icons.favorite, color: Colors.red),
+                          onPressed: () =>
+                              provider.toggleFavorite(song.id ?? -1),
                         ),
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.favorite, color: Colors.red),
-                  onPressed: () => value.toggleFavorite(song.id ?? -1),
-                ),
-                onTap: () {
-                  value.loadListIntoQueue(favorites, initialIndex: index);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SongPage()),
+                      ],
+                    ),
+                    onTap: () {
+                      provider.loadListIntoQueue(
+                        favorites,
+                        initialIndex: index,
+                      );
+                    },
                   );
                 },
               );

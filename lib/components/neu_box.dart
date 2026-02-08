@@ -20,7 +20,7 @@ class NeuBox extends StatelessWidget {
           // darker shadow on bottom right
           BoxShadow(
             color: isDarkMode
-                ? Colors.black.withOpacity(0.5)
+                ? Colors.black.withAlpha((0.5 * 255).toInt())
                 : Colors.grey.shade300,
             blurRadius: 15,
             offset: const Offset(4, 4),
@@ -28,7 +28,9 @@ class NeuBox extends StatelessWidget {
 
           //lighter shadow on top left
           BoxShadow(
-            color: isDarkMode ? Colors.white.withOpacity(0.05) : Colors.white,
+            color: isDarkMode
+                ? Colors.white.withAlpha((0.05 * 255).toInt())
+                : Colors.white,
             blurRadius: 15,
             offset: const Offset(-4, -4),
           ),
