@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:rhythm/pages/folder_selection_page.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 
 class LibraryScanningPage extends StatefulWidget {
@@ -44,7 +45,6 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
     _animationController.repeat(reverse: true);
 
     // Simulate progress while scanning
-    // Every scan should take at least 1-2 seconds for visual feedback
     const steps = 100;
     for (int i = 1; i <= steps; i++) {
       if (!mounted) return;
@@ -54,14 +54,9 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
       setState(() {
         _progress = i / steps;
       });
-
-      // At certain points, we can do the actual scan logic
-      if (i == 50) {
-        // Kick off actual scan in background or wait for it
-      }
     }
 
-    // Perform actual scan (already fast, so we do it at the end)
+    // Perform actual scan
     int newSongs = await provider.scanSongs();
 
     if (mounted) {
@@ -155,8 +150,8 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
                                     )
                                   else
                                     const Icon(
-                                      Icons.refresh_rounded,
-                                      size: 60,
+                                      Icons.search,
+                                      size: 50,
                                       color: Colors.white,
                                     ),
                                 ],
@@ -192,7 +187,68 @@ class _LibraryScanningPageState extends State<LibraryScanningPage>
                 ),
               ),
 
-              const SizedBox(height: 60),
+              const SizedBox(height: 48),
+
+              // Folder Selection Section
+              Text(
+                "DIRECTORY SETTINGS",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                  letterSpacing: 2.0,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    _buildFilterTile(
+                      context,
+                      title: "Select Folders",
+                      subtitle: provider.selectedFolders.isEmpty
+                          ? "Scanning all folders"
+                          : "${provider.selectedFolders.length} folders selected",
+                      trailing: IconButton(
+                        icon: const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 16,
+                        ),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const FolderSelectionPage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    if (provider.selectedFolders.isNotEmpty ||
+                        provider.excludedFolders.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: TextButton(
+                          onPressed: () {
+                            provider.setSelectedFolders([]);
+                            provider.excludedFolders.clear();
+                            provider.fetchSongs();
+                          },
+                          child: const Text(
+                            "Reset Folder Filters",
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
 
               // Filter Section
               Text(

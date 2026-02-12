@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/components/neu_box.dart';
@@ -7,8 +8,15 @@ import 'package:on_audio_query/on_audio_query.dart';
 import 'package:rhythm/components/song_options_bottom_sheet.dart';
 import 'package:rhythm/pages/queue_page.dart';
 
-class SongPage extends StatelessWidget {
+class SongPage extends StatefulWidget {
   const SongPage({super.key});
+
+  @override
+  State<SongPage> createState() => _SongPageState();
+}
+
+class _SongPageState extends State<SongPage> {
+  Timer? _seekTimer;
 
   // Durations format function (min:sec format)
   String formatTime(Duration duration) {
@@ -19,6 +27,34 @@ class SongPage extends StatelessWidget {
     String formattedTime = "${duration.inMinutes}:$twoDigitsSeconds";
 
     return formattedTime;
+  }
+
+  void _startSeeking(PlaylistProvider provider, bool forward) {
+    _seekTimer?.cancel();
+    _seekTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      final current = provider.currentDuration;
+      final total = provider.totalDuration;
+      final step = const Duration(seconds: 2);
+
+      if (forward) {
+        final newPos = current + step;
+        provider.seek(newPos < total ? newPos : total);
+      } else {
+        final newPos = current - step;
+        provider.seek(newPos > Duration.zero ? newPos : Duration.zero);
+      }
+    });
+  }
+
+  void _stopSeeking() {
+    _seekTimer?.cancel();
+    _seekTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _seekTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -70,6 +106,7 @@ class SongPage extends StatelessWidget {
                               onPressed: () {
                                 showModalBottomSheet(
                                   context: context,
+                                  useRootNavigator: true,
                                   isScrollControlled: true,
                                   backgroundColor: Colors.transparent,
                                   builder: (context) =>
@@ -98,28 +135,58 @@ class SongPage extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               // image
-                              SizedBox(
-                                width: MediaQuery.of(context).size.width * 0.7,
-                                height: MediaQuery.of(context).size.width * 0.7,
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: currentSong.isLocal
-                                      ? QueryArtworkWidget(
-                                          key: ValueKey(currentSong.id),
-                                          id: currentSong.id!,
-                                          type: ArtworkType.AUDIO,
-                                          artworkWidth:
-                                              MediaQuery.of(
+                              Hero(
+                                tag: 'song_artwork_${currentSong.id}',
+                                child: SizedBox(
+                                  width:
+                                      MediaQuery.of(context).size.width * 0.7,
+                                  height:
+                                      MediaQuery.of(context).size.width * 0.7,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: currentSong.isLocal
+                                        ? QueryArtworkWidget(
+                                            key: ValueKey(currentSong.id),
+                                            id: currentSong.id!,
+                                            type: ArtworkType.AUDIO,
+                                            artworkWidth:
+                                                MediaQuery.of(
+                                                  context,
+                                                ).size.width *
+                                                0.7,
+                                            artworkHeight:
+                                                MediaQuery.of(
+                                                  context,
+                                                ).size.width *
+                                                0.7,
+                                            artworkFit: BoxFit.cover,
+                                            nullArtworkWidget: Container(
+                                              width:
+                                                  MediaQuery.of(
+                                                    context,
+                                                  ).size.width *
+                                                  0.7,
+                                              height:
+                                                  MediaQuery.of(
+                                                    context,
+                                                  ).size.width *
+                                                  0.7,
+                                              color: Theme.of(
                                                 context,
-                                              ).size.width *
-                                              0.7,
-                                          artworkHeight:
-                                              MediaQuery.of(
-                                                context,
-                                              ).size.width *
-                                              0.7,
-                                          artworkFit: BoxFit.cover,
-                                          nullArtworkWidget: Container(
+                                              ).colorScheme.secondary,
+                                              child: Icon(
+                                                Icons.music_note,
+                                                size:
+                                                    MediaQuery.of(
+                                                      context,
+                                                    ).size.width *
+                                                    0.4,
+                                              ),
+                                            ),
+                                          )
+                                        : Image.asset(
+                                            currentSong.albumArtImagePath ??
+                                                "assets/images/album_artwork_1.png",
                                             width:
                                                 MediaQuery.of(
                                                   context,
@@ -130,34 +197,9 @@ class SongPage extends StatelessWidget {
                                                   context,
                                                 ).size.width *
                                                 0.7,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.secondary,
-                                            child: Icon(
-                                              Icons.music_note,
-                                              size:
-                                                  MediaQuery.of(
-                                                    context,
-                                                  ).size.width *
-                                                  0.4,
-                                            ),
+                                            fit: BoxFit.cover,
                                           ),
-                                        )
-                                      : Image.asset(
-                                          currentSong.albumArtImagePath ??
-                                              "assets/images/album_artwork_1.png",
-                                          width:
-                                              MediaQuery.of(
-                                                context,
-                                              ).size.width *
-                                              0.7,
-                                          height:
-                                              MediaQuery.of(
-                                                context,
-                                              ).size.width *
-                                              0.7,
-                                          fit: BoxFit.cover,
-                                        ),
+                                  ),
                                 ),
                               ),
 
@@ -348,9 +390,13 @@ class SongPage extends StatelessWidget {
                         // skip previous
                         Expanded(
                           child: NeuBox(
-                            child: IconButton(
-                              onPressed: provider.playPreviousSong,
-                              icon: const Icon(Icons.skip_previous),
+                            onTap: provider.playPreviousSong,
+                            onLongPress: () => _startSeeking(provider, false),
+                            onTapCancel: _stopSeeking,
+                            onLongPressEnd: _stopSeeking,
+                            child: const SizedBox(
+                              height: 48,
+                              child: Center(child: Icon(Icons.skip_previous)),
                             ),
                           ),
                         ),
@@ -358,27 +404,36 @@ class SongPage extends StatelessWidget {
                         // play/pause
                         Expanded(
                           flex: 2,
-                          child: NeuBox(
-                            child: Selector<PlaylistProvider, bool>(
-                              selector: (_, p) => p.isPlaying,
-                              builder: (context, isPlaying, _) {
-                                return IconButton(
-                                  onPressed: provider.pauseOrResume,
-                                  icon: Icon(
-                                    isPlaying ? Icons.pause : Icons.play_arrow,
+                          child: Selector<PlaylistProvider, bool>(
+                            selector: (_, p) => p.isPlaying,
+                            builder: (context, isPlaying, _) {
+                              return NeuBox(
+                                onTap: provider.pauseOrResume,
+                                child: SizedBox(
+                                  height: 48,
+                                  child: Center(
+                                    child: Icon(
+                                      isPlaying
+                                          ? Icons.pause
+                                          : Icons.play_arrow,
+                                    ),
                                   ),
-                                );
-                              },
-                            ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                         const SizedBox(width: 20),
                         // skip forward
                         Expanded(
                           child: NeuBox(
-                            child: IconButton(
-                              onPressed: provider.playNextSong,
-                              icon: const Icon(Icons.skip_next),
+                            onTap: provider.playNextSong,
+                            onLongPress: () => _startSeeking(provider, true),
+                            onTapCancel: _stopSeeking,
+                            onLongPressEnd: _stopSeeking,
+                            child: const SizedBox(
+                              height: 48,
+                              child: Center(child: Icon(Icons.skip_next)),
                             ),
                           ),
                         ),

@@ -15,13 +15,17 @@ class ArtistsPage extends StatelessWidget {
         title: const Text("A R T I S T S"),
         centerTitle: true,
       ),
-      body: Consumer<PlaylistProvider>(
-        builder: (context, value, child) {
-          final artists = value.artists;
-
+      body: Selector<PlaylistProvider, List<Map<String, dynamic>>>(
+        selector: (_, p) => p.artists,
+        builder: (context, artists, child) {
           if (artists.isEmpty) {
             return const Center(child: Text("No artists found"));
           }
+
+          final provider = Provider.of<PlaylistProvider>(
+            context,
+            listen: false,
+          );
 
           return ListView.builder(
             itemCount: artists.length,
@@ -63,7 +67,7 @@ class ArtistsPage extends StatelessWidget {
                     subtitle: Text(song.albumName),
                     trailing: Text(song.formattedDuration),
                     onTap: () {
-                      value.loadListIntoQueue(songs, initialIndex: sIndex);
+                      provider.loadListIntoQueue(songs, initialIndex: sIndex);
                     },
                   );
                 }).toList(),

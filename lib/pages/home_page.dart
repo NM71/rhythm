@@ -148,11 +148,9 @@ class _HomePageState extends State<HomePage> {
 
           final Song song = playlist[index];
 
-          return Selector<PlaylistProvider, int?>(
-            selector: (_, p) => p.currentSongId,
-            builder: (context, currentSongId, child) {
-              final bool isPlaying = currentSongId == song.id;
-
+          return Selector<PlaylistProvider, bool>(
+            selector: (_, p) => p.currentSongId == song.id,
+            builder: (context, isPlaying, child) {
               return ListTile(
                 leading: SizedBox(
                   width: 50,
@@ -214,6 +212,7 @@ class _HomePageState extends State<HomePage> {
                       onPressed: () {
                         showModalBottomSheet(
                           context: context,
+                          useRootNavigator: true,
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
                           builder: (context) =>

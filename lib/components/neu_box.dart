@@ -4,15 +4,26 @@ import 'package:rhythm/themes/theme_provider.dart';
 
 class NeuBox extends StatelessWidget {
   final Widget? child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onTapCancel;
+  final VoidCallback? onLongPressEnd;
 
-  const NeuBox({super.key, required this.child});
+  const NeuBox({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
+    this.onTapCancel,
+    this.onLongPressEnd,
+  });
 
   @override
   Widget build(BuildContext context) {
     // is dark mode
     bool isDarkMode = Provider.of<ThemeProvider>(context).isDarkMode;
 
-    return Container(
+    Widget content = Container(
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
@@ -36,8 +47,25 @@ class NeuBox extends StatelessWidget {
           ),
         ],
       ),
-      padding: EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
       child: child,
     );
+
+    if (onTap != null ||
+        onLongPress != null ||
+        onTapCancel != null ||
+        onLongPressEnd != null) {
+      return GestureDetector(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        onTapCancel: onTapCancel,
+        onLongPressEnd: onLongPressEnd != null
+            ? (_) => onLongPressEnd!()
+            : null,
+        child: content,
+      );
+    }
+
+    return content;
   }
 }

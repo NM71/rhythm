@@ -37,6 +37,9 @@ class PlaylistProvider extends ChangeNotifier {
 
   // Library Scanning Settings
   int _minSongDurationMs = 30000; // Default 30s
+  List<String> _excludedFolders = [];
+  List<String> _selectedFolders =
+      []; // New: Explicitly selected folders to scan
 
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
@@ -60,6 +63,12 @@ class PlaylistProvider extends ChangeNotifier {
   static const String _playlistsBox = 'playlists_box';
   static const String _settingsBox = 'settings_box';
   static const String _libraryCacheBox = 'library_cache_box';
+
+  // Cached lists for UI stability
+  List<Map<String, dynamic>>? _cachedAlbums;
+  List<Map<String, dynamic>>? _cachedArtists;
+  List<Song>? _cachedFilteredPlaylist;
+  String _lastFilteredQuery = '';
 
   // Constructor
   PlaylistProvider({required AudioHandler audioHandler})
@@ -131,6 +140,15 @@ class PlaylistProvider extends ChangeNotifier {
     // Load Settings
     final settingsBox = Hive.box(_settingsBox);
     _minSongDurationMs = settingsBox.get('minDuration', defaultValue: 30000);
+    _currentSortType =
+        SortType.values[settingsBox.get('sortType', defaultValue: 0)];
+    _sortAscending = settingsBox.get('sortAscending', defaultValue: true);
+    _excludedFolders = List<String>.from(
+      settingsBox.get('excludedFolders', defaultValue: []),
+    );
+    _selectedFolders = List<String>.from(
+      settingsBox.get('selectedFolders', defaultValue: []),
+    );
 
     // Load Library Cache
     final cacheBox = Hive.box(_libraryCacheBox);
@@ -140,6 +158,22 @@ class PlaylistProvider extends ChangeNotifier {
           .map((item) => Song.fromMap(Map.from(item)))
           .toList()
           .cast<Song>();
+
+      // Load last playback state info from cache if available
+      final lastQueue = cacheBox.get('lastQueue', defaultValue: []);
+      if (lastQueue.isNotEmpty) {
+        _queue = lastQueue
+            .map((item) => Song.fromMap(Map.from(item)))
+            .toList()
+            .cast<Song>();
+        _currentQueueIndex = cacheBox.get('lastQueueIndex');
+
+        final lastPosSeconds = cacheBox.get(
+          'lastPositionSeconds',
+          defaultValue: 0,
+        );
+        _currentDuration = Duration(seconds: lastPosSeconds);
+      }
     }
 
     notifyListeners();
@@ -162,13 +196,32 @@ class PlaylistProvider extends ChangeNotifier {
   }
 
   void _saveSettings() {
-    Hive.box(_settingsBox).put('minDuration', _minSongDurationMs);
+    final settingsBox = Hive.box(_settingsBox);
+    settingsBox.put('minDuration', _minSongDurationMs);
+    settingsBox.put('sortType', _currentSortType.index);
+    settingsBox.put('sortAscending', _sortAscending);
+    settingsBox.put('excludedFolders', _excludedFolders);
+    settingsBox.put('selectedFolders', _selectedFolders);
   }
 
   void _saveLibraryCache() {
     Hive.box(
       _libraryCacheBox,
     ).put('songs', _playlist.map((s) => s.toMap()).toList());
+  }
+
+  void _savePlaybackState() {
+    final cacheBox = Hive.box(_libraryCacheBox);
+    cacheBox.put('lastQueue', _queue.map((s) => s.toMap()).toList());
+    cacheBox.put('lastQueueIndex', _currentQueueIndex);
+    cacheBox.put('lastPositionSeconds', _currentDuration.inSeconds);
+  }
+
+  void _refreshCaches() {
+    _cachedAlbums = null;
+    _cachedArtists = null;
+    _cachedFilteredPlaylist = null;
+    _lastFilteredQuery = '';
   }
 
   // Request permissions and fetch songs
@@ -199,9 +252,35 @@ class PlaylistProvider extends ChangeNotifier {
           ignoreCase: true,
         );
 
-        // Convert to our Song model and filter by duration
+        // Convert to our Song model and filter by duration and folders
         _playlist = songs
-            .where((song) => (song.duration ?? 0) >= _minSongDurationMs)
+            .where((song) {
+              final bool durationMatch =
+                  (song.duration ?? 0) >= _minSongDurationMs;
+              if (!durationMatch) return false;
+
+              final String path = song.data;
+              final String folder = File(path).parent.path;
+
+              // Inclusion filter: if selectedFolders is NOT empty, only scan those
+              if (_selectedFolders.isNotEmpty) {
+                bool found = false;
+                for (final f in _selectedFolders) {
+                  if (folder.startsWith(f)) {
+                    found = true;
+                    break;
+                  }
+                }
+                if (!found) return false;
+              }
+
+              // Exclusion filter
+              for (final f in _excludedFolders) {
+                if (folder.startsWith(f)) return false;
+              }
+
+              return true;
+            })
             .map((song) {
               return Song(
                 songName: song.title,
@@ -216,6 +295,11 @@ class PlaylistProvider extends ChangeNotifier {
               );
             })
             .toList();
+
+        // Re-apply current sorting
+        sortPlaylist(_currentSortType, ascending: _sortAscending);
+
+        _refreshCaches();
         _saveLibraryCache();
       } else {
         _permissionGranted = false;
@@ -232,15 +316,17 @@ class PlaylistProvider extends ChangeNotifier {
   bool _isPlaying = false;
 
   // play song
-  void play() async {
+  void play({bool resume = false}) async {
     if (_queue.isEmpty || _currentQueueIndex == null) return;
 
     // get song
     final Song song = _queue[_currentQueueIndex!];
     final String path = song.audioPath;
 
-    // Reset durations for the new song
-    _currentDuration = Duration.zero;
+    if (!resume) {
+      // Reset durations for the new song if not resuming
+      _currentDuration = Duration.zero;
+    }
     _totalDuration = Duration(milliseconds: song.duration);
     notifyListeners();
 
@@ -253,18 +339,27 @@ class PlaylistProvider extends ChangeNotifier {
         duration: Duration(milliseconds: song.duration),
       );
 
-      // Cast to MyAudioHandler if possible to use custom playSong method
-      // or just use playMediaItem if implemented.
-      // Since MyAudioHandler is a custom class, let's use it.
       if (_audioHandler is MyAudioHandler) {
-        await _audioHandler.playSong(path, mediaItem, songId: song.id);
-      } else {
-        // Fallback or generic way if needed
+        final handler = _audioHandler;
+        if (resume) {
+          // If resuming, just prepare the source and seek, don't necessarily play immediately if it was paused on start
+          // But usually 'play' means play. For app restart, we might want 'prepare'.
+          // Let's assume play is called when we want to start playing.
+          await handler.playSong(
+            path,
+            mediaItem,
+            songId: song.id,
+            initialPosition: _currentDuration,
+          );
+        } else {
+          await handler.playSong(path, mediaItem, songId: song.id);
+        }
       }
 
       _isPlaying = true;
       // Add to recently played
       _addToRecentlyPlayed(song);
+      _savePlaybackState();
     } catch (e) {
       debugPrint("Error playing song: $e");
       _isPlaying = false;
@@ -276,6 +371,7 @@ class PlaylistProvider extends ChangeNotifier {
   void pause() async {
     await _audioHandler.pause();
     _isPlaying = false;
+    _savePlaybackState();
     notifyListeners();
   }
 
@@ -315,6 +411,9 @@ class PlaylistProvider extends ChangeNotifier {
   // seek to a specific position in current song
   void seek(Duration position) async {
     await _audioHandler.seek(position);
+    _currentDuration = position;
+    _savePlaybackState();
+    notifyListeners();
   }
 
   // play next song
@@ -336,11 +435,6 @@ class PlaylistProvider extends ChangeNotifier {
     } else {
       // wrap around to the first song
       _currentQueueIndex = 0;
-
-      // If repeat is off and this was an auto-advance,
-      // some might prefer to stop, but for a "Next" button
-      // it should definitely play the first song.
-      // We'll keep it simple and consistent with playPreviousSong for now.
     }
     play();
   }
@@ -375,8 +469,14 @@ class PlaylistProvider extends ChangeNotifier {
 
     // Listen to real-time position updates
     if (_audioHandler is MyAudioHandler) {
-      (_audioHandler as MyAudioHandler).positionStream.listen((position) {
+      final handler = _audioHandler;
+      handler.positionStream.listen((position) {
         _currentDuration = position;
+
+        // Save position every 5 seconds to avoid excessive writes
+        if (position.inSeconds % 5 == 0) {
+          _savePlaybackState();
+        }
         notifyListeners();
       });
     }
@@ -398,6 +498,7 @@ class PlaylistProvider extends ChangeNotifier {
     _queue = List.from(songs);
     _currentQueueIndex = initialIndex;
     play();
+    _savePlaybackState();
     notifyListeners();
   }
 
@@ -534,14 +635,106 @@ class PlaylistProvider extends ChangeNotifier {
 
   int? get currentSongId => currentSong?.id;
 
-  // Filtered playlist based on search
+  // Filtered playlist based on a professional scoring engine
   List<Song> get filteredPlaylist {
     if (_searchQuery.isEmpty) return _playlist;
-    final query = _searchQuery.toLowerCase();
-    return _playlist.where((song) {
-      return song.songName.toLowerCase().contains(query) ||
-          song.artistName.toLowerCase().contains(query);
-    }).toList();
+
+    // Return cached result if query hasn't changed
+    if (_searchQuery == _lastFilteredQuery && _cachedFilteredPlaylist != null) {
+      return _cachedFilteredPlaylist!;
+    }
+
+    final query = _searchQuery.toLowerCase().trim();
+    final queryTokens = query
+        .split(RegExp(r'\s+'))
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    if (queryTokens.isEmpty) return _playlist;
+
+    // List to store songs with their calculated scores
+    final List<MapEntry<Song, double>> scoredSongs = [];
+
+    for (final song in _playlist) {
+      double score = 0;
+      final title = song.songName.toLowerCase();
+      final artist = song.artistName.toLowerCase();
+      final album = song.albumName.toLowerCase();
+
+      // 1. Exact Full Phrase Match (Highest Boost)
+      if (title == query) {
+        score += 100;
+      } else if (title.contains(query)) {
+        score += 50;
+      }
+
+      if (artist == query) {
+        score += 60;
+      } else if (artist.contains(query)) {
+        score += 30;
+      }
+
+      // 2. Token-based matching (Multi-word support)
+      int matchedTokens = 0;
+      for (final token in queryTokens) {
+        bool tokenMatched = false;
+
+        // Title Token (Weight 1.0)
+        if (title.startsWith(token)) {
+          score += 20;
+          tokenMatched = true;
+        } else if (title.contains(token)) {
+          score += 10;
+          tokenMatched = true;
+        }
+
+        // Artist Token (Weight 0.8)
+        if (artist.startsWith(token)) {
+          score += 16;
+          tokenMatched = true;
+        } else if (artist.contains(token)) {
+          score += 8;
+          tokenMatched = true;
+        }
+
+        // Album Token (Weight 0.6)
+        if (album.startsWith(token)) {
+          score += 12;
+          tokenMatched = true;
+        } else if (album.contains(token)) {
+          score += 6;
+          tokenMatched = true;
+        }
+
+        if (tokenMatched) matchedTokens++;
+      }
+
+      // 3. Score weighting based on coverage
+      if (matchedTokens == 0) continue;
+
+      if (matchedTokens < queryTokens.length) {
+        // Penalty for partial matches (missing some words)
+        score *= (matchedTokens / queryTokens.length) * 0.5;
+      } else {
+        // Bonus for matching all words in the search
+        score += 50;
+      }
+
+      scoredSongs.add(MapEntry(song, score));
+    }
+
+    // Sort by score (descending), then by current user sort preference
+    scoredSongs.sort((a, b) {
+      if (b.value != a.value) {
+        return b.value.compareTo(a.value);
+      }
+      // If scores are tied, use the existing playlist order (which is already sorted)
+      return _playlist.indexOf(a.key).compareTo(_playlist.indexOf(b.key));
+    });
+
+    _cachedFilteredPlaylist = scoredSongs.map((e) => e.key).toList();
+    _lastFilteredQuery = _searchQuery;
+    return _cachedFilteredPlaylist!;
   }
 
   // Get favorite songs
@@ -551,26 +744,42 @@ class PlaylistProvider extends ChangeNotifier {
 
   // Get unique albums with song count
   List<Map<String, dynamic>> get albums {
+    if (_cachedAlbums != null) return _cachedAlbums!;
+
     final albumMap = <String, List<Song>>{};
     for (final song in _playlist) {
       albumMap.putIfAbsent(song.albumName, () => []).add(song);
     }
-    return albumMap.entries
-        .map((e) => {'name': e.key, 'songs': e.value, 'count': e.value.length})
-        .toList()
-      ..sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+    _cachedAlbums =
+        albumMap.entries
+            .map(
+              (e) => {'name': e.key, 'songs': e.value, 'count': e.value.length},
+            )
+            .toList()
+          ..sort(
+            (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+          );
+    return _cachedAlbums!;
   }
 
   // Get unique artists with song count
   List<Map<String, dynamic>> get artists {
+    if (_cachedArtists != null) return _cachedArtists!;
+
     final artistMap = <String, List<Song>>{};
     for (final song in _playlist) {
       artistMap.putIfAbsent(song.artistName, () => []).add(song);
     }
-    return artistMap.entries
-        .map((e) => {'name': e.key, 'songs': e.value, 'count': e.value.length})
-        .toList()
-      ..sort((a, b) => (a['name'] as String).compareTo(b['name'] as String));
+    _cachedArtists =
+        artistMap.entries
+            .map(
+              (e) => {'name': e.key, 'songs': e.value, 'count': e.value.length},
+            )
+            .toList()
+          ..sort(
+            (a, b) => (a['name'] as String).compareTo(b['name'] as String),
+          );
+    return _cachedArtists!;
   }
 
   // Set search query
@@ -594,6 +803,103 @@ class PlaylistProvider extends ChangeNotifier {
         .where((s) => !oldSongIds.contains(s.id))
         .toList();
     return newSongs.length;
+  }
+
+  // Folder Management
+  List<String> get excludedFolders => _excludedFolders;
+  List<String> get selectedFolders => _selectedFolders;
+
+  void toggleFolderExclusion(String path) {
+    if (_excludedFolders.contains(path)) {
+      _excludedFolders.remove(path);
+    } else {
+      _excludedFolders.add(path);
+    }
+    _saveSettings();
+    fetchSongs();
+    notifyListeners();
+  }
+
+  void toggleFolderSelection(String path) {
+    if (_selectedFolders.contains(path)) {
+      _selectedFolders.remove(path);
+    } else {
+      _selectedFolders.add(path);
+    }
+    _saveSettings();
+    fetchSongs();
+    notifyListeners();
+  }
+
+  void setSelectedFolders(List<String> folders) {
+    _selectedFolders = List.from(folders);
+    _saveSettings();
+    fetchSongs();
+    notifyListeners();
+  }
+
+  // Helper to discover all folders containing music
+  Future<List<String>> discoverMusicFolders() async {
+    final List<SongModel> songs = await _audioQuery.querySongs();
+    final Set<String> folders = {};
+    for (final s in songs) {
+      folders.add(File(s.data).parent.path);
+    }
+    final List<String> sortedFolders = folders.toList()..sort();
+    return sortedFolders;
+  }
+
+  Future<Map<String, String>> getStorageVolumes() async {
+    Map<String, String> volumes = {};
+    if (Platform.isAndroid) {
+      // Internal Storage
+      volumes['Internal Storage'] = '/storage/emulated/0';
+
+      // Try to find SD Cards/External Storage
+      try {
+        final dir = Directory('/storage');
+        if (await dir.exists()) {
+          final list = dir.listSync();
+          for (var entity in list) {
+            if (entity is Directory) {
+              final path = entity.path;
+              if (path != '/storage/emulated' && path != '/storage/self') {
+                final name = path.split('/').last;
+                // Simple check to avoid pseudo-filesystems
+                if (name.contains('-') ||
+                    (name.length > 4 && !name.contains('emulated'))) {
+                  volumes['SD Card ($name)'] = path;
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error finding storage volumes: $e');
+      }
+    } else {
+      // For other platforms (unlikely here but good for safety)
+      volumes['User Home'] = Platform.environment['HOME'] ?? '/';
+    }
+    return volumes;
+  }
+
+  Future<List<FileSystemEntity>> listDirectory(String path) async {
+    try {
+      final dir = Directory(path);
+      if (await dir.exists()) {
+        return dir.listSync().where((entity) {
+          // Hide hidden files/folders
+          return !entity.path
+              .split(Platform.pathSeparator)
+              .last
+              .startsWith('.');
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Error listing directory $path: $e');
+    }
+    return [];
   }
 
   // Recently played logic
@@ -632,16 +938,18 @@ class PlaylistProvider extends ChangeNotifier {
       }
     }
 
+    List<Song> sortedList = List.from(_playlist); // Renew list reference
+
     switch (sortType) {
       case SortType.title:
-        _playlist.sort(
+        sortedList.sort(
           (a, b) => _sortAscending
               ? a.songName.toLowerCase().compareTo(b.songName.toLowerCase())
               : b.songName.toLowerCase().compareTo(a.songName.toLowerCase()),
         );
         break;
       case SortType.artist:
-        _playlist.sort(
+        sortedList.sort(
           (a, b) => _sortAscending
               ? a.artistName.toLowerCase().compareTo(b.artistName.toLowerCase())
               : b.artistName.toLowerCase().compareTo(
@@ -650,20 +958,23 @@ class PlaylistProvider extends ChangeNotifier {
         );
         break;
       case SortType.duration:
-        _playlist.sort(
+        sortedList.sort(
           (a, b) => _sortAscending
               ? a.duration.compareTo(b.duration)
               : b.duration.compareTo(a.duration),
         );
         break;
       case SortType.dateAdded:
-        _playlist.sort(
+        sortedList.sort(
           (a, b) => _sortAscending
               ? (a.dateAdded ?? 0).compareTo(b.dateAdded ?? 0)
               : (b.dateAdded ?? 0).compareTo(a.dateAdded ?? 0),
         );
         break;
     }
+    _playlist = sortedList; // Assign the sorted list back
+    _refreshCaches();
+    _saveSettings();
     notifyListeners();
   }
 
@@ -747,17 +1058,17 @@ class PlaylistProvider extends ChangeNotifier {
     P L A Y L I S T   M A N A G E M E N T
     */
 
-  List<Playlist> get customPlaylists => _customPlaylists;
-
-  void createPlaylist(String name) {
-    final newPlaylist = Playlist(
+  List<Playlist> get customPlaylists => _customPlaylists; // Playlists Logic
+  Playlist createPlaylist(String name) {
+    final playlist = Playlist(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
       songs: [],
     );
-    _customPlaylists.add(newPlaylist);
+    _customPlaylists.add(playlist);
     _savePlaylists();
     notifyListeners();
+    return playlist;
   }
 
   void deletePlaylist(Playlist playlist) {

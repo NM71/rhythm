@@ -78,7 +78,12 @@ class MyAudioHandler extends BaseAudioHandler {
       _player.seek(_player.position - const Duration(seconds: 10));
 
   // Custom method to play specific song
-  Future<void> playSong(String path, MediaItem item, {int? songId}) async {
+  Future<void> playSong(
+    String path,
+    MediaItem item, {
+    int? songId,
+    Duration? initialPosition,
+  }) async {
     // try to get artwork if it's a local song
     MediaItem itemWithArtwork = item;
     if (songId != null) {
@@ -90,10 +95,6 @@ class MyAudioHandler extends BaseAudioHandler {
         );
 
         if (artBytes != null) {
-          // Create a temp file or use artHeaders?
-          // audio_service supports artUri, but for bytes it's better to save to temp file
-          // Just_audio/AudioService handles 'file://' or 'content://' or 'HTTPS'
-          // We'll save it to a temporary location.
           final tempDir = Directory.systemTemp;
           final artFile = File('${tempDir.path}/art_$songId.jpg');
           await artFile.writeAsBytes(artBytes);
@@ -113,6 +114,11 @@ class MyAudioHandler extends BaseAudioHandler {
     } else {
       await _player.setAudioSource(AudioSource.uri(Uri.parse('file://$path')));
     }
+
+    if (initialPosition != null && initialPosition > Duration.zero) {
+      await _player.seek(initialPosition);
+    }
+
     await _player.play();
   }
 

@@ -16,24 +16,21 @@ class MiniPlayer extends StatelessWidget {
     return Selector<PlaylistProvider, int?>(
       selector: (_, p) => p.currentSongIndex,
       builder: (context, currentSongIndex, child) {
-        if (currentSongIndex == null ||
-            provider.playlist.isEmpty ||
-            currentSongIndex >= provider.playlist.length) {
+        final Song? currentSong = provider.currentSong;
+
+        if (currentSong == null) {
           return const SizedBox.shrink();
         }
 
-        final Song currentSong = provider.playlist[currentSongIndex];
-
         return GestureDetector(
           onTap: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) => const SongPage(),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SongPage()),
             );
           },
           child: Container(
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(12),
@@ -48,94 +45,115 @@ class MiniPlayer extends StatelessWidget {
                 ),
               ],
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(15),
-              child: Row(
-                children: [
-                  // album art
-                  SizedBox(
-                    width: 50,
-                    height: 50,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: currentSong.isLocal
-                          ? QueryArtworkWidget(
-                              key: ValueKey(currentSong.id),
-                              id: currentSong.id!,
-                              type: ArtworkType.AUDIO,
-                              artworkWidth: 50,
-                              artworkHeight: 50,
-                              artworkFit: BoxFit.cover,
-                              nullArtworkWidget: Container(
-                                color: Theme.of(context).colorScheme.secondary,
-                                child: const Icon(Icons.music_note),
-                              ),
-                            )
-                          : Image.asset(
-                              currentSong.albumArtImagePath ??
-                                  "assets/images/album_artwork_1.png",
-                              width: 50,
-                              height: 50,
-                              fit: BoxFit.cover,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  // song info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        MarqueeText(
-                          text: currentSong.songName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        MarqueeText(
-                          text: currentSong.artistName,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Theme.of(context).colorScheme.inversePrimary
-                                .withAlpha((0.6 * 255).toInt()),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // controls
-                  Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(15),
+                  child: Row(
                     children: [
-                      // previous
-                      IconButton(
-                        onPressed: provider.playPreviousSong,
-                        icon: const Icon(Icons.skip_previous),
+                      // album art
+                      Hero(
+                        tag: 'song_artwork_${currentSong.id}',
+                        child: SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: currentSong.isLocal
+                                ? QueryArtworkWidget(
+                                    key: ValueKey(currentSong.id),
+                                    id: currentSong.id!,
+                                    type: ArtworkType.AUDIO,
+                                    artworkWidth: 50,
+                                    artworkHeight: 50,
+                                    artworkFit: BoxFit.cover,
+                                    nullArtworkWidget: Container(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.secondary,
+                                      child: const Icon(Icons.music_note),
+                                    ),
+                                  )
+                                : Image.asset(
+                                    currentSong.albumArtImagePath ??
+                                        "assets/images/album_artwork_1.png",
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                  ),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 15),
-                      // play/pause
-                      Selector<PlaylistProvider, bool>(
-                        selector: (_, p) => p.isPlaying,
-                        builder: (context, isPlaying, child) {
-                          return IconButton(
-                            onPressed: provider.pauseOrResume,
-                            icon: Icon(
-                              isPlaying ? Icons.pause : Icons.play_arrow,
-                              size: 30,
+                      // song info
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            MarqueeText(
+                              text: currentSong.songName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          );
-                        },
+                            MarqueeText(
+                              text: currentSong.artistName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .inversePrimary
+                                    .withAlpha((0.6 * 255).toInt()),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 15),
-                      // next
-                      IconButton(
-                        onPressed: provider.playNextSong,
-                        icon: const Icon(Icons.skip_next),
+                      // controls
+                      Row(
+                        children: [
+                          // play/pause
+                          Selector<PlaylistProvider, bool>(
+                            selector: (_, p) => p.isPlaying,
+                            builder: (context, isPlaying, child) {
+                              return IconButton(
+                                onPressed: provider.pauseOrResume,
+                                icon: Icon(
+                                  isPlaying ? Icons.pause : Icons.play_arrow,
+                                  size: 30,
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                // Progress Bar at the bottom
+                Selector<PlaylistProvider, double>(
+                  selector: (_, p) {
+                    final total = p.totalDuration.inMilliseconds.toDouble();
+                    final current = p.currentDuration.inMilliseconds.toDouble();
+                    if (total == 0) return 0;
+                    return (current / total).clamp(0.0, 1.0);
+                  },
+                  builder: (context, progress, child) {
+                    return SizedBox(
+                      height: 3,
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.secondary.withAlpha(50),
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         );

@@ -55,6 +55,7 @@ class SongOptionsBottomSheet extends StatelessWidget {
   void _showPlaylistSelector(BuildContext context, PlaylistProvider provider) {
     showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -137,11 +138,16 @@ class SongOptionsBottomSheet extends StatelessWidget {
           TextButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
-                provider.createPlaylist(controller.text);
+                final newPlaylist = provider.createPlaylist(controller.text);
+                // AUTO-ADD SONG
+                provider.addSongToPlaylist(song, newPlaylist);
+
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text("Created playlist ${controller.text}"),
+                    content: Text(
+                      "Created ${controller.text} and added ${song.songName}",
+                    ),
                   ),
                 );
               }
