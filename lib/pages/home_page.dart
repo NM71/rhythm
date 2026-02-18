@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/pages/library_scanning_page.dart';
-import 'package:rhythm/components/my_drawer.dart';
 import 'package:rhythm/components/song_options_bottom_sheet.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/models/song.dart';
@@ -10,6 +9,7 @@ import 'package:rhythm/pages/artists_page.dart';
 import 'package:rhythm/pages/recently_played_page.dart';
 import 'package:rhythm/components/playing_indicator.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:rhythm/pages/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -39,8 +39,13 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      drawer: const MyDrawer(),
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.menu),
+          onPressed: () {
+            _showMenuSheet(context);
+          },
+        ),
         title: const Text("S O N G S"),
         centerTitle: true,
         actions: [
@@ -84,31 +89,6 @@ class _HomePageState extends State<HomePage> {
               _buildSearchAndSortBar(context, provider),
 
               // Song Count Display
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20.0,
-                  vertical: 8.0,
-                ),
-                child: Row(
-                  children: [
-                    Selector<PlaylistProvider, int>(
-                      selector: (_, p) => p.filteredPlaylist.length,
-                      builder: (context, count, _) {
-                        return Text(
-                          "$count Songs",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.inversePrimary
-                                .withAlpha((0.7 * 255).toInt()),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
               Expanded(
                 child: Selector<PlaylistProvider, List<Song>>(
                   selector: (_, p) => p.filteredPlaylist,
@@ -276,11 +256,11 @@ class _HomePageState extends State<HomePage> {
       padding: const EdgeInsets.only(right: 8.0),
       child: ActionChip(
         label: Text(label),
-        avatar: Icon(icon, size: 16),
+        avatar: Icon(icon, size: 15),
         backgroundColor: Theme.of(context).colorScheme.secondary,
         labelStyle: TextStyle(
           color: Theme.of(context).colorScheme.inversePrimary,
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
         onPressed: onTap,
@@ -289,73 +269,47 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  PopupMenuItem<SortType> _sortItem(
-    SortType type,
-    String label,
-    PlaylistProvider value,
-  ) {
-    return PopupMenuItem(
-      value: type,
-      child: Row(
-        children: [
-          Icon(
-            type == SortType.title
-                ? Icons.title
-                : type == SortType.artist
-                ? Icons.person
-                : type == SortType.duration
-                ? Icons.timer
-                : Icons.calendar_today,
-          ),
-          const SizedBox(width: 8),
-          Text(label),
-          if (value.currentSortType == type)
-            Icon(
-              value.sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
-              size: 16,
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSearchAndSortBar(BuildContext context, PlaylistProvider value) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Search Field
+          // Search Bar
           Expanded(
             child: Container(
-              height: 50,
+              height: 40,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondary,
-                borderRadius: BorderRadius.circular(15),
+                color: Theme.of(context).colorScheme.secondary.withAlpha(50),
+                borderRadius: BorderRadius.circular(20),
               ),
               child: TextField(
                 controller: _searchController,
                 onChanged: (query) => value.setSearchQuery(query),
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.inversePrimary,
+                  fontSize: 14,
                 ),
                 decoration: InputDecoration(
-                  hintText: "Search songs, artists...",
+                  hintText: "Search...",
                   hintStyle: TextStyle(
                     color: Theme.of(
                       context,
                     ).colorScheme.inversePrimary.withAlpha((0.5 * 255).toInt()),
+                    fontSize: 14,
                   ),
                   prefixIcon: Icon(
                     Icons.search,
+                    size: 18,
                     color: Theme.of(
                       context,
                     ).colorScheme.inversePrimary.withAlpha((0.5 * 255).toInt()),
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
                   suffixIcon: value.searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear),
+                          icon: const Icon(Icons.clear, size: 18),
                           onPressed: () {
                             value.setSearchQuery('');
                             _searchController.clear();
@@ -366,33 +320,208 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          // Sort Button
-          Container(
-            height: 50,
-            width: 50,
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.secondary,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: PopupMenuButton<SortType>(
-              icon: Icon(
-                Icons.sort_rounded,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              tooltip: "Sort by",
-              offset: const Offset(0, 50),
-              onSelected: (sortType) => value.sortPlaylist(sortType),
-              itemBuilder: (context) => [
-                _sortItem(SortType.title, "Title", value),
-                _sortItem(SortType.artist, "Artist", value),
-                _sortItem(SortType.duration, "Duration", value),
-                _sortItem(SortType.dateAdded, "Date Added", value),
-              ],
+
+          const SizedBox(width: 4),
+
+          // Sort Icon Button
+          Selector<PlaylistProvider, (SortType, bool)>(
+            selector: (_, p) => (p.currentSortType, p.sortAscending),
+            builder: (context, sortData, _) {
+              return IconButton(
+                onPressed: () => _showSortOptions(context, value),
+                icon: Icon(
+                  Icons.sort,
+                  color: Theme.of(context).colorScheme.inversePrimary,
+                ),
+                tooltip: 'Sort',
+              );
+            },
+          ),
+
+          // Shuffle Button
+          IconButton(
+            icon: const Icon(Icons.shuffle_rounded),
+            color: Theme.of(context).colorScheme.primary,
+            onPressed: () {
+              // Randomly pick and play a song
+              if (value.playlist.isNotEmpty) {
+                final randomIndex =
+                    (DateTime.now().millisecondsSinceEpoch %
+                    value.playlist.length);
+                // Ensure shuffle mode is on if user explicitly asks for shuffle
+                if (!value.isShuffle) {
+                  value.toggleShuffle();
+                }
+                value.loadListIntoQueue(
+                  value.playlist,
+                  initialIndex: randomIndex,
+                );
+              }
+            },
+          ),
+
+          // Song Count
+          Text(
+            "${value.filteredPlaylist.length} Songs",
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).colorScheme.inversePrimary,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showSortOptions(BuildContext context, PlaylistProvider value) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true, // Display above bottom nav and miniplayer
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Sort By",
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildSortOption(
+                context,
+                value,
+                SortType.dateAdded,
+                "Date Added",
+              ),
+              _buildSortOption(context, value, SortType.title, "Title"),
+              _buildSortOption(context, value, SortType.artist, "Artist"),
+              _buildSortOption(context, value, SortType.duration, "Duration"),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSortOption(
+    BuildContext context,
+    PlaylistProvider value,
+    SortType type,
+    String label,
+  ) {
+    final isSelected = value.currentSortType == type;
+    return ListTile(
+      title: Text(
+        label,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.inversePrimary,
+        ),
+      ),
+      trailing: isSelected
+          ? Icon(
+              value.sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+              color: Theme.of(context).colorScheme.primary,
+            )
+          : null,
+      onTap: () {
+        value.sortPlaylist(type);
+        Navigator.pop(context);
+      },
+    );
+  }
+
+  void _showMenuSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      useRootNavigator: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              // Drag handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    sheetContext,
+                  ).colorScheme.inversePrimary.withAlpha(80),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // App Logo
+              Image.asset(
+                'assets/rhythm-logo-new.png',
+                color: Theme.of(sheetContext).colorScheme.inversePrimary,
+                width: 40,
+                height: 40,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'R H Y T H M',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 2,
+                  color: Theme.of(sheetContext).colorScheme.inversePrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Settings
+              ListTile(
+                leading: const Icon(Icons.settings),
+                title: const Text('S E T T I N G S'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute(builder: (_) => const SettingsPage()),
+                  );
+                },
+              ),
+              // About
+              ListTile(
+                leading: const Icon(Icons.info_outline),
+                title: const Text('A B O U T'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'Rhythm',
+                    applicationVersion: '1.0.0',
+                    applicationIcon: Image.asset(
+                      'assets/rhythm-logo-new.png',
+                      color: Theme.of(context).colorScheme.inversePrimary,
+                      width: 40,
+                      height: 40,
+                    ),
+                    children: [const Text('Built with ❤️ by Nousher Murtaza')],
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
     );
   }
 

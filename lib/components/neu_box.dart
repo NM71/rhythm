@@ -8,6 +8,7 @@ class NeuBox extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onTapCancel;
   final VoidCallback? onLongPressEnd;
+  final EdgeInsetsGeometry? padding;
 
   const NeuBox({
     super.key,
@@ -16,6 +17,7 @@ class NeuBox extends StatelessWidget {
     this.onLongPress,
     this.onTapCancel,
     this.onLongPressEnd,
+    this.padding,
   });
 
   @override
@@ -47,7 +49,7 @@ class NeuBox extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.all(12),
+      padding: padding ?? const EdgeInsets.all(12),
       child: child,
     );
 

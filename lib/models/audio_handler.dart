@@ -66,6 +66,14 @@ class MyAudioHandler extends BaseAudioHandler {
 
   @override
   Future<void> setShuffleMode(AudioServiceShuffleMode shuffleMode) async {
+    final enabled = shuffleMode == AudioServiceShuffleMode.all;
+    if (enabled) {
+      await _player.setShuffleModeEnabled(true);
+    } else {
+      await _player.setShuffleModeEnabled(false);
+    }
+    playbackState.add(playbackState.value.copyWith(shuffleMode: shuffleMode));
+
     if (onShuffleModeChanged != null) onShuffleModeChanged!(shuffleMode);
   }
 
@@ -120,6 +128,47 @@ class MyAudioHandler extends BaseAudioHandler {
     }
 
     await _player.play();
+  }
+
+  // Prepare a song without auto-playing (for session restore)
+  Future<void> prepareSong(
+    String path,
+    MediaItem item, {
+    int? songId,
+    Duration? initialPosition,
+  }) async {
+    MediaItem itemWithArtwork = item;
+    if (songId != null) {
+      try {
+        final Uint8List? artBytes = await _audioQuery.queryArtwork(
+          songId,
+          ArtworkType.AUDIO,
+          format: ArtworkFormat.JPEG,
+        );
+        if (artBytes != null) {
+          final tempDir = Directory.systemTemp;
+          final artFile = File('${tempDir.path}/art_$songId.jpg');
+          await artFile.writeAsBytes(artBytes);
+          itemWithArtwork = item.copyWith(artUri: Uri.file(artFile.path));
+        }
+      } catch (e) {
+        debugPrint("Error fetching artwork for notification: $e");
+      }
+    }
+
+    mediaItem.add(itemWithArtwork);
+    if (path.startsWith('assets/')) {
+      await _player.setAudioSource(
+        AudioSource.uri(Uri.parse('asset:///$path')),
+      );
+    } else {
+      await _player.setAudioSource(AudioSource.uri(Uri.parse('file://$path')));
+    }
+
+    if (initialPosition != null && initialPosition > Duration.zero) {
+      await _player.seek(initialPosition);
+    }
+    // Do NOT call play() — let the user decide
   }
 
   PlaybackState _transformEvent(PlaybackEvent event) {

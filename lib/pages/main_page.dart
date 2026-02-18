@@ -34,6 +34,15 @@ class _MainPageState extends State<MainPage> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
+
+        // If keyboard is open or a text field has focus, unfocus it first
+        final FocusScopeNode currentFocus = FocusScope.of(context);
+        if (!currentFocus.hasPrimaryFocus &&
+            currentFocus.focusedChild != null) {
+          currentFocus.unfocus();
+          return;
+        }
+
         final NavigatorState? currentNavigator =
             _navigatorKeys[_selectedIndex].currentState;
         if (currentNavigator != null && currentNavigator.canPop()) {

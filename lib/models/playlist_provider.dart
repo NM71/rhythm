@@ -44,7 +44,7 @@ class PlaylistProvider extends ChangeNotifier {
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
   // Loading and permission states
-  bool _isLoading = false;
+  bool _isLoading = true;
   bool _permissionGranted = false;
   bool _isInitialized = false;
 
@@ -75,7 +75,7 @@ class PlaylistProvider extends ChangeNotifier {
     : _audioHandler = audioHandler {
     _initPersistence().then((_) {
       if (_audioHandler is MyAudioHandler) {
-        _audioHandler.onSkipToNext = playNextSong;
+        _audioHandler.onSkipToNext = () => playNextSong(manual: true);
         _audioHandler.onSkipToPrevious = playPreviousSong;
 
         _audioHandler.onRepeatModeChanged = (mode) {
@@ -173,9 +173,41 @@ class PlaylistProvider extends ChangeNotifier {
           defaultValue: 0,
         );
         _currentDuration = Duration(seconds: lastPosSeconds);
+
+        // Prepare the audio source so the user can play immediately
+        _prepareRestoredSong();
       }
     }
 
+    notifyListeners();
+  }
+
+  /// Prepare the audio player with the restored song (no auto-play)
+  Future<void> _prepareRestoredSong() async {
+    if (_queue.isEmpty || _currentQueueIndex == null) return;
+    final song = _queue[_currentQueueIndex!];
+    _totalDuration = Duration(milliseconds: song.duration);
+
+    try {
+      if (_audioHandler is MyAudioHandler) {
+        final handler = _audioHandler;
+        final mediaItem = MediaItem(
+          id: song.audioPath,
+          album: song.albumName,
+          title: song.songName,
+          artist: song.artistName,
+          duration: Duration(milliseconds: song.duration),
+        );
+        await handler.prepareSong(
+          song.audioPath,
+          mediaItem,
+          songId: song.id,
+          initialPosition: _currentDuration,
+        );
+      }
+    } catch (e) {
+      debugPrint("Error preparing restored song: $e");
+    }
     notifyListeners();
   }
 
@@ -390,6 +422,9 @@ class PlaylistProvider extends ChangeNotifier {
 
   void toggleShuffle() {
     _isShuffle = !_isShuffle;
+    _audioHandler.setShuffleMode(
+      _isShuffle ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
+    );
     notifyListeners();
   }
 
@@ -409,15 +444,13 @@ class PlaylistProvider extends ChangeNotifier {
   }
 
   // seek to a specific position in current song
-  void seek(Duration position) async {
-    await _audioHandler.seek(position);
-    _currentDuration = position;
-    _savePlaybackState();
-    notifyListeners();
+  void seek(Duration position) {
+    _audioHandler.seek(position);
   }
 
   // play next song
-  void playNextSong() {
+  // manual: true when the user explicitly taps skip (so repeat-one is ignored)
+  void playNextSong({bool manual = false}) {
     if (_queue.isEmpty || _currentQueueIndex == null) return;
 
     if (_isShuffle) {
@@ -428,8 +461,8 @@ class PlaylistProvider extends ChangeNotifier {
         } while (randomIndex == _currentQueueIndex);
         _currentQueueIndex = randomIndex;
       }
-    } else if (_isRepeatOne) {
-      // stay on same index
+    } else if (_isRepeatOne && !manual) {
+      // stay on same index only for auto-completion
     } else if (_currentQueueIndex! < _queue.length - 1) {
       _currentQueueIndex = _currentQueueIndex! + 1;
     } else {
@@ -461,8 +494,11 @@ class PlaylistProvider extends ChangeNotifier {
     _audioHandler.playbackState.listen((state) {
       _isPlaying = state.playing;
 
+      // Note: We do NOT sync shuffle state from the audio handler here.
+      // Our shuffle is managed at the queue level, not the player level.
+
       if (state.processingState == AudioProcessingState.completed) {
-        playNextSong();
+        playNextSong(manual: false);
       }
       notifyListeners();
     });
@@ -1013,17 +1049,41 @@ class PlaylistProvider extends ChangeNotifier {
       // 1. If currently playing, stop it
       final currentQueueIndex = _currentQueueIndex;
       if (currentQueueIndex != null &&
+          _queue.isNotEmpty &&
           _queue[currentQueueIndex].id == song.id) {
         await _audioHandler.stop();
         _isPlaying = false;
+        // Move to next song if possible
+        _queue.removeAt(currentQueueIndex);
+        if (_queue.isNotEmpty) {
+          _currentQueueIndex = currentQueueIndex < _queue.length
+              ? currentQueueIndex
+              : 0;
+        } else {
+          _currentQueueIndex = null;
+        }
+      } else {
+        // Remove from queue and adjust index
+        final removedIndex = _queue.indexWhere((s) => s.id == song.id);
+        if (removedIndex >= 0) {
+          _queue.removeAt(removedIndex);
+          if (_currentQueueIndex != null &&
+              removedIndex < _currentQueueIndex!) {
+            _currentQueueIndex = _currentQueueIndex! - 1;
+          }
+        }
       }
 
-      // 2. Remove from collections
-      _queue.removeWhere((s) => s.id == song.id);
+      // 2. Remove from all collections
       _playlist.removeWhere((s) => s.id == song.id);
       _favorites.remove(song.id);
       _recentlyPlayed.removeWhere((s) => s.id == song.id);
 
+      _refreshCaches();
+      _saveLibraryCache();
+      _saveFavorites();
+      _saveRecentlyPlayed();
+      _savePlaybackState();
       notifyListeners();
       return true;
     } catch (e) {
@@ -1034,21 +1094,56 @@ class PlaylistProvider extends ChangeNotifier {
 
   Future<bool> deleteFromDevice(Song song) async {
     try {
-      // 1. Remove from app first
-      await removeFromLibrary(song);
+      if (!song.isLocal || song.audioPath.isEmpty) return false;
 
-      // 2. Delete from physical storage if local
-      if (song.isLocal && song.audioPath.isNotEmpty) {
-        final file = File(song.audioPath);
-        if (await file.exists()) {
-          await file.delete();
+      // 0. If this is the currently playing song, stop playback first
+      // This ensures the file is not locked by the media player
+      if (currentSong?.id == song.id) {
+        debugPrint(
+          "Stopping playback for song being deleted: ${song.songName}",
+        );
+        await _audioHandler.stop();
+        _isPlaying = false;
+        notifyListeners();
+      }
+
+      // 1. Handle MANAGE_EXTERNAL_STORAGE on Android 11+ (API 30+)
+      if (Platform.isAndroid) {
+        final status = await Permission.manageExternalStorage.status;
+        if (!status.isGranted) {
+          debugPrint("Requesting MANAGE_EXTERNAL_STORAGE");
+          // On Android 11+, this opens the "All files access" settings page
+          final result = await Permission.manageExternalStorage.request();
+          if (!result.isGranted) {
+            debugPrint("MANAGE_EXTERNAL_STORAGE permission denied");
+            return false;
+          }
         }
       }
+
+      final file = File(song.audioPath);
+      if (await file.exists()) {
+        try {
+          await file.delete();
+          debugPrint("Successfully deleted file: ${song.audioPath}");
+        } on FileSystemException catch (e) {
+          debugPrint("FileSystemException during delete: $e");
+          // If delete still fails, it might be due to scoped storage or other locks
+          return false;
+        }
+      } else {
+        debugPrint(
+          "File does not exist on disk, removing from library only: ${song.audioPath}",
+        );
+      }
+
+      // 2. Remove from app library after successful (or unnecessary) file deletion
+      await removeFromLibrary(song);
 
       notifyListeners();
       return true;
     } catch (e) {
-      debugPrint("Error deleting from storage: $e");
+      debugPrint("Error in deleteFromDevice: $e");
       return false;
     }
   }

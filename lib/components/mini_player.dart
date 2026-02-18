@@ -24,10 +24,17 @@ class MiniPlayer extends StatelessWidget {
 
         return GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SongPage()),
-            );
+            _openSongPage(context);
+          },
+          onVerticalDragUpdate: (details) {
+            // Track upward drag — we'll use it to trigger open
+            // A negative delta.dy means dragging up
+          },
+          onVerticalDragEnd: (details) {
+            if (details.primaryVelocity != null &&
+                details.primaryVelocity! < -100) {
+              _openSongPage(context);
+            }
           },
           child: Container(
             clipBehavior: Clip.antiAlias,
@@ -156,6 +163,41 @@ class MiniPlayer extends StatelessWidget {
               ],
             ),
           ),
+        );
+      },
+    );
+  }
+
+  void _openSongPage(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _SongPageSheet(),
+    );
+  }
+}
+
+/// A full-screen draggable bottom sheet that wraps the SongPage.
+/// The user can drag down to dismiss smoothly.
+class _SongPageSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 1.0,
+      minChildSize: 0.0,
+      maxChildSize: 1.0,
+      snap: true,
+      snapSizes: const [0.0, 1.0],
+      builder: (context, scrollController) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: const SongPage(),
         );
       },
     );

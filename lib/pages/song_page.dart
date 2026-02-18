@@ -88,7 +88,7 @@ class _SongPageState extends State<SongPage> {
                       children: [
                         // back button
                         IconButton(
-                          icon: const Icon(Icons.arrow_back),
+                          icon: const Icon(Icons.keyboard_arrow_down),
                           onPressed: () => Navigator.pop(context),
                         ),
                         // title
@@ -131,6 +131,7 @@ class _SongPageState extends State<SongPage> {
                         final currentSong = provider.queue[currentQueueIndex];
 
                         return NeuBox(
+                          padding: const EdgeInsets.all(8),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -220,7 +221,7 @@ class _SongPageState extends State<SongPage> {
                                           MarqueeText(
                                             text: currentSong.songName,
                                             style: const TextStyle(
-                                              fontSize: 20,
+                                              fontSize: 18,
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -427,7 +428,7 @@ class _SongPageState extends State<SongPage> {
                         // skip forward
                         Expanded(
                           child: NeuBox(
-                            onTap: provider.playNextSong,
+                            onTap: () => provider.playNextSong(manual: true),
                             onLongPress: () => _startSeeking(provider, true),
                             onTapCancel: _stopSeeking,
                             onLongPressEnd: _stopSeeking,
