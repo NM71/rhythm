@@ -47,10 +47,11 @@ class _MainPageState extends State<MainPage> {
             _navigatorKeys[_selectedIndex].currentState;
         if (currentNavigator != null && currentNavigator.canPop()) {
           currentNavigator.pop();
-        } else {
-          // If we can't pop anymore in the current navigator,
-          // we might want to shut down or show a confirmation.
-          // For now, we'll allow system pop if it's the first page.
+        } else if (_selectedIndex != 0) {
+          // If on a non-primary tab, switch back to Songs tab
+          setState(() {
+            _selectedIndex = 0;
+          });
         }
       },
       child: Scaffold(

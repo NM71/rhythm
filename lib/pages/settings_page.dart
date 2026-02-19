@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:rhythm/pages/about_page.dart';
 import 'package:rhythm/themes/theme_provider.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 
@@ -158,25 +159,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 );
               },
             ),
-          ),
-          const SizedBox(height: 32),
-
-          // About Section
-          const Text(
-            "About",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            context,
-            title: "Rhythm Music Player",
-            subtitle: "Version 1.0.0",
-          ),
-          const SizedBox(height: 16),
-          _buildSettingsTile(
-            context,
-            title: "Nousher Murtaza",
-            subtitle: "Built with Flutter ❤️",
           ),
         ],
       ),

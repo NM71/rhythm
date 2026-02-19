@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:rhythm/models/playlist.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/pages/favorites_page.dart';
 import 'package:rhythm/pages/playlist_details_page.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class PlaylistsPage extends StatelessWidget {
   const PlaylistsPage({super.key});
@@ -33,9 +35,53 @@ class PlaylistsPage extends StatelessWidget {
                   listen: false,
                 ).createPlaylist(name);
                 Navigator.pop(context);
+                Fluttertoast.cancel();
+                Fluttertoast.showToast(
+                  msg: "Playlist '$name' created",
+                  toastLength: Toast.LENGTH_SHORT,
+                  gravity: ToastGravity.BOTTOM,
+                  backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+                  textColor: Theme.of(context).colorScheme.surface,
+                );
               }
             },
             child: const Text("Create"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(
+    BuildContext context,
+    PlaylistProvider provider,
+    Playlist playlist,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: const Text("Delete Playlist?"),
+        content: Text("Are you sure you want to delete '${playlist.name}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () {
+              provider.deletePlaylist(playlist);
+              Navigator.pop(context);
+              Fluttertoast.cancel();
+              Fluttertoast.showToast(
+                msg: "Playlist '${playlist.name}' deleted",
+                toastLength: Toast.LENGTH_SHORT,
+                gravity: ToastGravity.BOTTOM,
+                backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+                textColor: Theme.of(context).colorScheme.surface,
+              );
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -110,7 +156,7 @@ class PlaylistsPage extends StatelessWidget {
                       );
                     },
                     onDelete: () {
-                      value.deletePlaylist(playlist);
+                      _showDeleteConfirmation(context, value, playlist);
                     },
                   ),
                 ),

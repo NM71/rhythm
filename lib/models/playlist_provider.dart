@@ -756,6 +756,9 @@ class PlaylistProvider extends ChangeNotifier {
         score += 50;
       }
 
+      // Only include results with meaningful match scores
+      if (score < 5) continue;
+
       scoredSongs.add(MapEntry(song, score));
     }
 

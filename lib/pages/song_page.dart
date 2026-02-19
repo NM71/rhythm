@@ -7,6 +7,7 @@ import 'package:rhythm/components/marquee_text.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:rhythm/components/song_options_bottom_sheet.dart';
 import 'package:rhythm/pages/queue_page.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class SongPage extends StatefulWidget {
   const SongPage({super.key});
@@ -17,16 +18,20 @@ class SongPage extends StatefulWidget {
 
 class _SongPageState extends State<SongPage> {
   Timer? _seekTimer;
+  bool _showRemainingDuration = false;
 
   // Durations format function (min:sec format)
   String formatTime(Duration duration) {
-    String twoDigitsSeconds = duration.inSeconds
+    bool isNegative = duration.isNegative;
+    Duration absoluteDuration = duration.abs();
+
+    String twoDigitsSeconds = absoluteDuration.inSeconds
         .remainder(60)
         .toString()
         .padLeft(2, '0');
-    String formattedTime = "${duration.inMinutes}:$twoDigitsSeconds";
+    String formattedTime = "${absoluteDuration.inMinutes}:$twoDigitsSeconds";
 
-    return formattedTime;
+    return isNegative ? "-$formattedTime" : formattedTime;
   }
 
   void _startSeeking(PlaylistProvider provider, bool forward) {
@@ -242,6 +247,22 @@ class _SongPageState extends State<SongPage> {
                                         provider.toggleFavorite(
                                           currentSong.id ?? -1,
                                         );
+                                        final isFav = provider.favoriteIds
+                                            .contains(currentSong.id ?? -1);
+                                        Fluttertoast.cancel();
+                                        Fluttertoast.showToast(
+                                          msg: isFav
+                                              ? "Added to Favorites"
+                                              : "Removed from Favorites",
+                                          toastLength: Toast.LENGTH_SHORT,
+                                          gravity: ToastGravity.BOTTOM,
+                                          backgroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.inversePrimary,
+                                          textColor: Theme.of(
+                                            context,
+                                          ).colorScheme.surface,
+                                        );
                                       },
                                       icon:
                                           Selector<PlaylistProvider, List<int>>(
@@ -280,7 +301,13 @@ class _SongPageState extends State<SongPage> {
                               Selector<PlaylistProvider, Duration>(
                                 selector: (_, p) => p.currentDuration,
                                 builder: (context, currentDuration, _) {
-                                  return Text(formatTime(currentDuration));
+                                  return SizedBox(
+                                    width: 45,
+                                    child: Text(
+                                      formatTime(currentDuration),
+                                      textAlign: TextAlign.left,
+                                    ),
+                                  );
                                 },
                               ),
 
@@ -289,7 +316,23 @@ class _SongPageState extends State<SongPage> {
                                 selector: (_, p) => p.isShuffle,
                                 builder: (context, isShuffle, _) {
                                   return IconButton(
-                                    onPressed: provider.toggleShuffle,
+                                    onPressed: () {
+                                      provider.toggleShuffle();
+                                      Fluttertoast.cancel();
+                                      Fluttertoast.showToast(
+                                        msg: provider.isShuffle
+                                            ? "Shuffle On"
+                                            : "Shuffle Off",
+                                        toastLength: Toast.LENGTH_SHORT,
+                                        gravity: ToastGravity.BOTTOM,
+                                        backgroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.inversePrimary,
+                                        textColor: Theme.of(
+                                          context,
+                                        ).colorScheme.surface,
+                                      );
+                                    },
                                     icon: Icon(
                                       Icons.shuffle,
                                       color: isShuffle
@@ -322,7 +365,27 @@ class _SongPageState extends State<SongPage> {
                                   final isRepeat = repeatState.$1;
                                   final isRepeatOne = repeatState.$2;
                                   return IconButton(
-                                    onPressed: provider.toggleRepeat,
+                                    onPressed: () {
+                                      provider.toggleRepeat();
+                                      String mode = "Repeat Off";
+                                      if (provider.isRepeatOne) {
+                                        mode = "Repeat One";
+                                      } else if (provider.isRepeat) {
+                                        mode = "Repeat All";
+                                      }
+                                      Fluttertoast.cancel();
+                                      Fluttertoast.showToast(
+                                        msg: mode,
+                                        toastLength: Toast.LENGTH_SHORT,
+                                        gravity: ToastGravity.BOTTOM,
+                                        backgroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.inversePrimary,
+                                        textColor: Theme.of(
+                                          context,
+                                        ).colorScheme.surface,
+                                      );
+                                    },
                                     icon: Icon(
                                       isRepeatOne
                                           ? Icons.repeat_one
@@ -338,10 +401,31 @@ class _SongPageState extends State<SongPage> {
                               ),
 
                               // end time
-                              Selector<PlaylistProvider, Duration>(
-                                selector: (_, p) => p.totalDuration,
-                                builder: (context, totalDuration, _) {
-                                  return Text(formatTime(totalDuration));
+                              Selector<PlaylistProvider, (Duration, Duration)>(
+                                selector: (_, p) =>
+                                    (p.totalDuration, p.currentDuration),
+                                builder: (context, durations, _) {
+                                  final total = durations.$1;
+                                  final current = durations.$2;
+                                  return GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _showRemainingDuration =
+                                            !_showRemainingDuration;
+                                      });
+                                    },
+                                    child: SizedBox(
+                                      width: 45,
+                                      child: Text(
+                                        formatTime(
+                                          _showRemainingDuration
+                                              ? (current - total)
+                                              : total,
+                                        ),
+                                        textAlign: TextAlign.right,
+                                      ),
+                                    ),
+                                  );
                                 },
                               ),
                             ],

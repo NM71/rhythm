@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/models/song.dart';
+import 'package:rhythm/pages/edit_metadata_page.dart';
 
 class SongOptionsBottomSheet extends StatelessWidget {
   final Song song;
@@ -13,40 +14,109 @@ class SongOptionsBottomSheet extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: const Text("Song Details"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Column(
           children: [
-            _detailRow("Title", song.songName),
-            _detailRow("Artist", song.artistName),
-            _detailRow("Album", song.albumName),
-            _detailRow("Duration", song.formattedDuration),
-            _detailRow("Type", song.isLocal ? "Local File" : "Asset"),
-            if (song.audioPath.isNotEmpty) _detailRow("Path", song.audioPath),
+            Icon(
+              Icons.info_outline_rounded,
+              size: 40,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 10),
+            Text(
+              "Song Details",
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.inversePrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _detailRow(context, "Title", song.songName, Icons.title_rounded),
+              _detailRow(
+                context,
+                "Artist",
+                song.artistName,
+                Icons.person_rounded,
+              ),
+              _detailRow(context, "Album", song.albumName, Icons.album_rounded),
+              _detailRow(
+                context,
+                "Duration",
+                song.formattedDuration,
+                Icons.timer_rounded,
+              ),
+              _detailRow(
+                context,
+                "Type",
+                song.isLocal ? "Local File" : "Asset",
+                Icons.insert_drive_file_rounded,
+              ),
+              if (song.audioPath.isNotEmpty)
+                _detailRow(
+                  context,
+                  "Path",
+                  song.audioPath,
+                  Icons.folder_open_rounded,
+                ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
+            child: Text(
+              "Close",
+              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  Widget _detailRow(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Column(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          Icon(icon, size: 20, color: colorScheme.primary.withAlpha(180)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10,
+                    letterSpacing: 1.1,
+                    color: colorScheme.primary.withAlpha(150),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: colorScheme.inversePrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
-          Text(value, style: const TextStyle(fontSize: 14)),
         ],
       ),
     );
@@ -290,7 +360,7 @@ class SongOptionsBottomSheet extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Divider(),
+          const Divider(color: Colors.transparent),
           // Options
           ListTile(
             leading: const Icon(Icons.info_outline),
@@ -309,6 +379,24 @@ class SongOptionsBottomSheet extends StatelessWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.edit_note),
+            title: const Text("Edit Info"),
+            onTap: () async {
+              Navigator.pop(context);
+              // ignore: use_build_context_synchronously
+              final bool? result =
+                  await Navigator.of(context, rootNavigator: true).push(
+                    MaterialPageRoute(
+                      builder: (context) => EditMetadataPage(song: song),
+                    ),
+                  );
+
+              if (result == true && context.mounted) {
+                provider.fetchSongs();
+              }
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.share_outlined),
             title: const Text("Share"),
             onTap: () {
@@ -316,25 +404,16 @@ class SongOptionsBottomSheet extends StatelessWidget {
               provider.shareSong(song);
             },
           ),
-          const Divider(),
+          const Divider(color: Colors.transparent),
           ListTile(
-            leading: const Icon(
-              Icons.remove_circle_outline,
-              color: Colors.orange,
-            ),
+            leading: const Icon(Icons.remove_circle_outline),
             title: const Text("Remove from Library"),
             subtitle: const Text("Keep file, hide from app"),
             onTap: () => _confirmRemoveFromLibrary(context, provider),
           ),
           ListTile(
-            leading: const Icon(
-              Icons.delete_forever_outlined,
-              color: Colors.red,
-            ),
-            title: const Text(
-              "Delete from Storage",
-              style: TextStyle(color: Colors.red),
-            ),
+            leading: const Icon(Icons.delete_outline, color: Colors.red),
+            title: const Text("Delete from Storage"),
             subtitle: const Text("Warning: Permanent removal"),
             onTap: () => _confirmDeleteFromDevice(context, provider),
           ),

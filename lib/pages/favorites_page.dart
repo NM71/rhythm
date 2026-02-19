@@ -4,6 +4,7 @@ import 'package:rhythm/models/playlist_provider.dart';
 import 'package:rhythm/models/song.dart';
 import 'package:rhythm/components/playing_indicator.dart';
 import 'package:on_audio_query/on_audio_query.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class FavoritesPage extends StatelessWidget {
   const FavoritesPage({super.key});
@@ -125,8 +126,24 @@ class FavoritesPage extends StatelessWidget {
                           ),
                         IconButton(
                           icon: const Icon(Icons.favorite, color: Colors.red),
-                          onPressed: () =>
-                              provider.toggleFavorite(song.id ?? -1),
+                          onPressed: () {
+                            provider.toggleFavorite(song.id ?? -1);
+                            final isFav = provider.favoriteIds.contains(
+                              song.id ?? -1,
+                            );
+                            Fluttertoast.cancel();
+                            Fluttertoast.showToast(
+                              msg: isFav
+                                  ? "Added to Favorites"
+                                  : "Removed from Favorites",
+                              toastLength: Toast.LENGTH_SHORT,
+                              gravity: ToastGravity.BOTTOM,
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.inversePrimary,
+                              textColor: Theme.of(context).colorScheme.surface,
+                            );
+                          },
                         ),
                       ],
                     ),

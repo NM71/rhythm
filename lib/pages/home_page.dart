@@ -10,6 +10,7 @@ import 'package:rhythm/pages/recently_played_page.dart';
 import 'package:rhythm/components/playing_indicator.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:rhythm/pages/settings_page.dart';
+import 'package:rhythm/pages/about_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,6 +21,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late final TextEditingController _searchController;
+
+  // Selection Mode State
+  bool _isSelectionMode = false;
+  final Set<Song> _selectedSongs = {};
 
   @override
   void initState() {
@@ -35,32 +40,99 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  void _toggleSelection(Song song) {
+    setState(() {
+      if (_selectedSongs.contains(song)) {
+        _selectedSongs.remove(song);
+        if (_selectedSongs.isEmpty) {
+          _isSelectionMode = false;
+        }
+      } else {
+        _selectedSongs.add(song);
+      }
+    });
+  }
+
+  void _enterSelectionMode(Song song) {
+    setState(() {
+      _isSelectionMode = true;
+      _selectedSongs.clear();
+      _selectedSongs.add(song);
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedSongs.clear();
+    });
+  }
+
+  void _selectAll(List<Song> allSongs) {
+    setState(() {
+      _selectedSongs.addAll(allSongs);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () {
-            _showMenuSheet(context);
-          },
-        ),
-        title: const Text("S O N G S"),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.library_music_rounded),
-            onPressed: () {
-              Navigator.of(context, rootNavigator: true).push(
-                MaterialPageRoute(
-                  builder: (context) => const LibraryScanningPage(),
+      appBar: _isSelectionMode
+          ? AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _exitSelectionMode,
+              ),
+              title: Text("${_selectedSongs.length} Selected"),
+              centerTitle: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.select_all),
+                  onPressed: () {
+                    final provider = Provider.of<PlaylistProvider>(
+                      context,
+                      listen: false,
+                    );
+                    _selectAll(provider.filteredPlaylist);
+                  },
                 ),
-              );
-            },
-          ),
-        ],
-      ),
+                IconButton(
+                  icon: const Icon(Icons.playlist_add),
+                  onPressed: () {
+                    _showBatchAddToPlaylistDialog(context);
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete),
+                  onPressed: () {
+                    _showBatchDeleteDialog(context);
+                  },
+                ),
+              ],
+            )
+          : AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () {
+                  _showMenuSheet(context);
+                },
+              ),
+              title: const Text("S O N G S"),
+              centerTitle: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.library_music_rounded),
+                  onPressed: () {
+                    Navigator.of(context, rootNavigator: true).push(
+                      MaterialPageRoute(
+                        builder: (context) => const LibraryScanningPage(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
       body: Selector<PlaylistProvider, (bool, bool, int)>(
         selector: (_, p) =>
             (p.isLoading, p.permissionGranted, p.playlist.length),
@@ -80,136 +152,304 @@ class _HomePageState extends State<HomePage> {
             return _buildPermissionDenied(provider);
           }
 
-          return Column(
-            children: [
-              // Category Chips
-              _buildCategoryChips(context),
-
-              // Search and Sort Bar
-              _buildSearchAndSortBar(context, provider),
-
-              // Song Count Display
-              Expanded(
-                child: Selector<PlaylistProvider, List<Song>>(
-                  selector: (_, p) => p.filteredPlaylist,
-                  builder: (context, playlist, _) {
-                    return _buildMainContent(context, provider, playlist);
-                  },
-                ),
-              ),
-            ],
+          return Selector<PlaylistProvider, List<Song>>(
+            selector: (_, p) => p.filteredPlaylist,
+            builder: (context, playlist, _) {
+              return _buildScrollableContent(context, provider, playlist);
+            },
           );
         },
       ),
     );
   }
 
-  Widget _buildMainContent(
+  String _formatTotalDuration(List<Song> songs) {
+    final totalMs = songs.fold<int>(0, (sum, s) => sum + s.duration);
+    final hours = totalMs ~/ 3600000;
+    final minutes = (totalMs % 3600000) ~/ 60000;
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
+  }
+
+  Widget _buildScrollableContent(
     BuildContext context,
     PlaylistProvider value,
     List<Song> playlist,
   ) {
-    if (playlist.isEmpty && value.searchQuery.isNotEmpty) {
-      return _buildNoResults(value.searchQuery);
-    }
+    return CustomScrollView(
+      slivers: [
+        // Floating SliverAppBar with chips + search bar
+        SliverAppBar(
+          floating: true,
+          snap: true,
+          automaticallyImplyLeading: false,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          toolbarHeight: 0, // We only need the bottom section
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(130),
+            child: Column(
+              children: [
+                _buildCategoryChips(context),
+                _buildSearchAndSortBar(context, value),
+              ],
+            ),
+          ),
+        ),
 
-    if (playlist.isEmpty && value.searchQuery.isEmpty) {
-      return _buildEmptyState(value);
-    }
+        // Song count + total duration header
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 4.0,
+            ),
+            child: Text(
+              '${playlist.length} songs • ${_formatTotalDuration(playlist)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(
+                  context,
+                ).colorScheme.inversePrimary.withAlpha(140),
+              ),
+            ),
+          ),
+        ),
 
-    return RefreshIndicator(
-      onRefresh: () => value.fetchSongs(),
-      child: ListView.builder(
-        itemCount: playlist.length + 1, // +1 for padding
-        itemBuilder: (context, index) {
-          if (index == playlist.length) {
-            return const SizedBox(height: 100);
-          }
+        // Main content
+        if (playlist.isEmpty && value.searchQuery.isNotEmpty)
+          SliverFillRemaining(child: _buildNoResults(value.searchQuery))
+        else if (playlist.isEmpty && value.searchQuery.isEmpty)
+          SliverFillRemaining(child: _buildEmptyState(value))
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                if (index == playlist.length) {
+                  return const SizedBox(height: 100); // Padding for mini player
+                }
 
-          final Song song = playlist[index];
+                final Song song = playlist[index];
 
-          return Selector<PlaylistProvider, bool>(
-            selector: (_, p) => p.currentSongId == song.id,
-            builder: (context, isPlaying, child) {
-              return ListTile(
-                leading: SizedBox(
-                  width: 50,
-                  height: 50,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: song.isLocal
-                        ? QueryArtworkWidget(
-                            key: ValueKey(song.id),
-                            id: song.id!,
-                            type: ArtworkType.AUDIO,
-                            artworkWidth: 50,
-                            artworkHeight: 50,
-                            artworkFit: BoxFit.cover,
-                            nullArtworkWidget: _buildPlaceholderArt(context),
-                          )
-                        : Image.asset(
-                            song.albumArtImagePath ??
-                                "assets/images/album_artwork_1.png",
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.cover,
-                          ),
-                  ),
-                ),
-                title: Text(
-                  song.songName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: isPlaying ? FontWeight.bold : FontWeight.normal,
-                    color: isPlaying
-                        ? Theme.of(context).colorScheme.primary
-                        : null,
-                  ),
-                ),
-                subtitle: Text(
-                  "${song.artistName} • ${song.formattedDuration}",
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isPlaying
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.primary.withAlpha((0.8 * 255).toInt())
-                        : null,
-                  ),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isPlaying)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8.0),
-                        child: PlayingIndicator(),
+                return Selector<PlaylistProvider, bool>(
+                  selector: (_, p) => p.currentSongId == song.id,
+                  builder: (context, isPlaying, child) {
+                    final isSelected = _selectedSongs.contains(song);
+
+                    return ListTile(
+                      selected: isSelected,
+                      selectedTileColor: Theme.of(
+                        context,
+                      ).colorScheme.primary.withAlpha((0.1 * 255).toInt()),
+                      leading: _isSelectionMode
+                          ? Checkbox(
+                              value: isSelected,
+                              activeColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                              onChanged: (bool? value) {
+                                _toggleSelection(song);
+                              },
+                            )
+                          : SizedBox(
+                              width: 50,
+                              height: 50,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: song.isLocal
+                                    ? QueryArtworkWidget(
+                                        key: ValueKey(song.id),
+                                        id: song.id!,
+                                        type: ArtworkType.AUDIO,
+                                        artworkWidth: 50,
+                                        artworkHeight: 50,
+                                        artworkFit: BoxFit.cover,
+                                        nullArtworkWidget: _buildPlaceholderArt(
+                                          context,
+                                        ),
+                                      )
+                                    : Image.asset(
+                                        song.albumArtImagePath ??
+                                            "assets/images/album_artwork_1.png",
+                                        width: 50,
+                                        height: 50,
+                                        fit: BoxFit.cover,
+                                      ),
+                              ),
+                            ),
+                      title: Text(
+                        song.songName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: isPlaying
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          color: isPlaying
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
                       ),
-                    IconButton(
-                      icon: const Icon(Icons.more_vert),
-                      onPressed: () {
-                        showModalBottomSheet(
-                          context: context,
-                          useRootNavigator: true,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) =>
-                              SongOptionsBottomSheet(song: song),
+                      subtitle: Text(
+                        "${song.artistName} • ${song.formattedDuration}",
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isPlaying
+                              ? Theme.of(context).colorScheme.primary.withAlpha(
+                                  (0.8 * 255).toInt(),
+                                )
+                              : null,
+                        ),
+                      ),
+                      trailing: _isSelectionMode
+                          ? null
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isPlaying)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 8.0),
+                                    child: PlayingIndicator(),
+                                  ),
+                                IconButton(
+                                  icon: const Icon(Icons.more_vert),
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      useRootNavigator: true,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (context) =>
+                                          SongOptionsBottomSheet(song: song),
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                      onTap: () {
+                        if (_isSelectionMode) {
+                          _toggleSelection(song);
+                        } else {
+                          value.loadListIntoQueue(
+                            playlist,
+                            initialIndex: index,
+                          );
+                        }
+                      },
+                      onLongPress: () {
+                        if (!_isSelectionMode) {
+                          _enterSelectionMode(song);
+                        }
+                      },
+                    );
+                  },
+                );
+              },
+              childCount: playlist.length + 1, // +1 for padding
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showBatchAddToPlaylistDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Add Selected to Playlist"),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Consumer<PlaylistProvider>(
+              builder: (context, provider, child) {
+                final playlists = provider.customPlaylists;
+                if (playlists.isEmpty) {
+                  return const Text("No playlists found. Create one first.");
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: playlists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = playlists[index];
+                    return ListTile(
+                      title: Text(playlist.name),
+                      onTap: () {
+                        for (final song in _selectedSongs) {
+                          provider.addSongToPlaylist(song, playlist);
+                        }
+                        Navigator.pop(context);
+                        _exitSelectionMode();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              "Added ${_selectedSongs.length} songs to ${playlist.name}",
+                            ),
+                          ),
                         );
                       },
-                    ),
-                  ],
-                ),
-                onTap: () {
-                  value.loadListIntoQueue(playlist, initialIndex: index);
-                },
-              );
-            },
-          );
-        },
-      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showBatchDeleteDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Delete ${_selectedSongs.length} songs?"),
+          content: const Text(
+            "This will permanently delete the selected files from your device. This action cannot be undone.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context); // Close dialog
+                final provider = Provider.of<PlaylistProvider>(
+                  context,
+                  listen: false,
+                );
+                int successCount = 0;
+                // Clone the list because we might modify it or the provider's list
+                final songsToDelete = List<Song>.from(_selectedSongs);
+
+                for (final song in songsToDelete) {
+                  if (await provider.deleteFromDevice(song)) {
+                    successCount++;
+                  }
+                }
+
+                _exitSelectionMode();
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Deleted $successCount songs")),
+                  );
+                }
+              },
+              child: const Text("Delete", style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -328,6 +568,7 @@ class _HomePageState extends State<HomePage> {
             selector: (_, p) => (p.currentSortType, p.sortAscending),
             builder: (context, sortData, _) {
               return IconButton(
+                visualDensity: VisualDensity.compact,
                 onPressed: () => _showSortOptions(context, value),
                 icon: Icon(
                   Icons.sort,
@@ -340,6 +581,7 @@ class _HomePageState extends State<HomePage> {
 
           // Shuffle Button
           IconButton(
+            visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.shuffle_rounded),
             color: Theme.of(context).colorScheme.primary,
             onPressed: () {
@@ -358,15 +600,6 @@ class _HomePageState extends State<HomePage> {
                 );
               }
             },
-          ),
-
-          // Song Count
-          Text(
-            "${value.filteredPlaylist.length} Songs",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.inversePrimary,
-            ),
           ),
         ],
       ),
@@ -472,20 +705,22 @@ class _HomePageState extends State<HomePage> {
               Image.asset(
                 'assets/rhythm-logo-new.png',
                 color: Theme.of(sheetContext).colorScheme.inversePrimary,
-                width: 40,
-                height: 40,
+                width: 60,
+                height: 60,
               ),
               const SizedBox(height: 8),
               Text(
                 'R H Y T H M',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 2,
                   color: Theme.of(sheetContext).colorScheme.inversePrimary,
                 ),
               ),
+
               const SizedBox(height: 16),
+              const Divider(color: Colors.transparent),
               // Settings
               ListTile(
                 leading: const Icon(Icons.settings),
@@ -503,18 +738,10 @@ class _HomePageState extends State<HomePage> {
                 title: const Text('A B O U T'),
                 onTap: () {
                   Navigator.pop(sheetContext);
-                  showAboutDialog(
-                    context: context,
-                    applicationName: 'Rhythm',
-                    applicationVersion: '1.0.0',
-                    applicationIcon: Image.asset(
-                      'assets/rhythm-logo-new.png',
-                      color: Theme.of(context).colorScheme.inversePrimary,
-                      width: 40,
-                      height: 40,
-                    ),
-                    children: [const Text('Built with ❤️ by Nousher Murtaza')],
-                  );
+                  Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).push(MaterialPageRoute(builder: (_) => const AboutPage()));
                 },
               ),
               const SizedBox(height: 8),
