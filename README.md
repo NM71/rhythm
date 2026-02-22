@@ -29,9 +29,9 @@
     <td><strong>SongPage (dark)></td>
   </tr>
   <tr>
-    <td><img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="200"/></td>
-    <td><img src="screenshots/2.webp" width="200"/></td>
-    <td><img src="screenshots/3 (dark).webp" width="200"/></td>
+    <td><img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="250"/></td>
+    <td><img src="screenshots/2.webp" width="250"/></td>
+    <td><img src="screenshots/3 (dark).webp" width="250"/></td>
   </tr>
   <tr>
     <td><strong>SongPage (light)</strong></td>
@@ -39,9 +39,9 @@
     <td><strong>Edit Metadata</strong></td>
   </tr>
   <tr>
-    <td><img src="screenshots/3 (light).webp" width="200"/></td>
-    <td><img src="screenshots/4.webp" width="200"/></td>
-    <td><img src="screenshots/5.webp" width="200"/></td>
+    <td><img src="screenshots/3 (light).webp" width="250"/></td>
+    <td><img src="screenshots/4.webp" width="250"/></td>
+    <td><img src="screenshots/5.webp" width="250"/></td>
   </tr>
     <tr>
     <td><strong>Playlists</strong></td>
@@ -49,9 +49,9 @@
     <td><strong>About</strong></td>
   </tr>
   <tr>
-    <td><img src="screenshots/6.webp" width="200"/></td>
-    <td><img src="screenshots/7.webp" width="200"/></td>
-    <td><img src="screenshots/8.webp" width="200"/></td>
+    <td><img src="screenshots/6.webp" width="250"/></td>
+    <td><img src="screenshots/7.webp" width="250"/></td>
+    <td><img src="screenshots/8.webp" width="250"/></td>
   </tr>
 </table>
 
