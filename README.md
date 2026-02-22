@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="120" alt="Rhythm Logo">
+  <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="250" alt="Rhythm Logo">
 </p>
 
 # Rhythm
