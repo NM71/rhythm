@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/models/playlist_provider.dart';
@@ -68,19 +69,34 @@ class MiniPlayer extends StatelessWidget {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: currentSong.isLocal
-                                ? QueryArtworkWidget(
-                                    key: ValueKey(currentSong.id),
-                                    id: currentSong.id!,
-                                    type: ArtworkType.AUDIO,
-                                    artworkWidth: 50,
-                                    artworkHeight: 50,
-                                    artworkFit: BoxFit.cover,
-                                    nullArtworkWidget: Container(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.secondary,
-                                      child: const Icon(Icons.music_note),
-                                    ),
+                                ? ValueListenableBuilder<Uint8List?>(
+                                    valueListenable:
+                                        provider.currentArtworkNotifier,
+                                    builder: (context, bytes, _) {
+                                      if (bytes != null) {
+                                        return Image.memory(
+                                          bytes,
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
+                                          gaplessPlayback: true,
+                                        );
+                                      }
+                                      return QueryArtworkWidget(
+                                        key: ValueKey(currentSong.id),
+                                        id: currentSong.id!,
+                                        type: ArtworkType.AUDIO,
+                                        artworkWidth: 50,
+                                        artworkHeight: 50,
+                                        artworkFit: BoxFit.cover,
+                                        nullArtworkWidget: Container(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.secondary,
+                                          child: const Icon(Icons.music_note),
+                                        ),
+                                      );
+                                    },
                                   )
                                 : Image.asset(
                                     currentSong.albumArtImagePath ??
@@ -140,23 +156,30 @@ class MiniPlayer extends StatelessWidget {
                   ),
                 ),
                 // Progress Bar at the bottom
-                Selector<PlaylistProvider, double>(
-                  selector: (_, p) {
-                    final total = p.totalDuration.inMilliseconds.toDouble();
-                    final current = p.currentDuration.inMilliseconds.toDouble();
-                    if (total == 0) return 0;
-                    return (current / total).clamp(0.0, 1.0);
-                  },
-                  builder: (context, progress, child) {
-                    return SizedBox(
-                      height: 3,
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        backgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.secondary.withAlpha(50),
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                Selector<PlaylistProvider, Duration>(
+                  selector: (_, p) => p.totalDuration,
+                  builder: (context, totalDuration, child) {
+                    return ValueListenableBuilder<Duration>(
+                      valueListenable: provider.currentDurationNotifier,
+                      builder: (context, currentDuration, _) {
+                        final total = totalDuration.inMilliseconds.toDouble();
+                        final current = currentDuration.inMilliseconds
+                            .toDouble();
+                        double progress = 0;
+                        if (total > 0) {
+                          progress = (current / total).clamp(0.0, 1.0);
+                        }
+                        return SizedBox(
+                          height: 3,
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.secondary.withAlpha(50),
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        );
+                      },
                     );
                   },
                 ),

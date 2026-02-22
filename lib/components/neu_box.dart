@@ -68,6 +68,6 @@ class NeuBox extends StatelessWidget {
       );
     }
 
-    return content;
+    return RepaintBoundary(child: content);
   }
 }

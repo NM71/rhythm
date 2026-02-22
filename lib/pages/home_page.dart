@@ -179,6 +179,7 @@ class _HomePageState extends State<HomePage> {
     List<Song> playlist,
   ) {
     return CustomScrollView(
+      cacheExtent: 1000, // Pre-render items for smoother scrolling
       slivers: [
         // Floating SliverAppBar with chips + search bar
         SliverAppBar(
@@ -252,30 +253,35 @@ class _HomePageState extends State<HomePage> {
                                 _toggleSelection(song);
                               },
                             )
-                          : SizedBox(
-                              width: 50,
-                              height: 50,
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: song.isLocal
-                                    ? QueryArtworkWidget(
-                                        key: ValueKey(song.id),
-                                        id: song.id!,
-                                        type: ArtworkType.AUDIO,
-                                        artworkWidth: 50,
-                                        artworkHeight: 50,
-                                        artworkFit: BoxFit.cover,
-                                        nullArtworkWidget: _buildPlaceholderArt(
-                                          context,
+                          : RepaintBoundary(
+                              child: SizedBox(
+                                width: 50,
+                                height: 50,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: song.isLocal
+                                      ? QueryArtworkWidget(
+                                          key: ValueKey(song.id),
+                                          id: song.id!,
+                                          type: ArtworkType.AUDIO,
+                                          artworkWidth: 50,
+                                          artworkHeight: 50,
+                                          artworkFit: BoxFit.cover,
+                                          format: ArtworkFormat
+                                              .JPEG, // More efficient than PNG
+                                          size:
+                                              100, // Reduced quality for list items
+                                          nullArtworkWidget:
+                                              _buildPlaceholderArt(context),
+                                        )
+                                      : Image.asset(
+                                          song.albumArtImagePath ??
+                                              "assets/images/album_artwork_1.png",
+                                          width: 50,
+                                          height: 50,
+                                          fit: BoxFit.cover,
                                         ),
-                                      )
-                                    : Image.asset(
-                                        song.albumArtImagePath ??
-                                            "assets/images/album_artwork_1.png",
-                                        width: 50,
-                                        height: 50,
-                                        fit: BoxFit.cover,
-                                      ),
+                                ),
                               ),
                             ),
                       title: Text(

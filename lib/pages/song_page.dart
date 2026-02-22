@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rhythm/components/neu_box.dart';
@@ -151,44 +152,67 @@ class _SongPageState extends State<SongPage> {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(12),
                                     child: currentSong.isLocal
-                                        ? QueryArtworkWidget(
-                                            key: ValueKey(currentSong.id),
-                                            id: currentSong.id!,
-                                            type: ArtworkType.AUDIO,
-                                            artworkWidth:
-                                                MediaQuery.of(
-                                                  context,
-                                                ).size.width *
-                                                0.7,
-                                            artworkHeight:
-                                                MediaQuery.of(
-                                                  context,
-                                                ).size.width *
-                                                0.7,
-                                            artworkFit: BoxFit.cover,
-                                            nullArtworkWidget: Container(
-                                              width:
-                                                  MediaQuery.of(
-                                                    context,
-                                                  ).size.width *
-                                                  0.7,
-                                              height:
-                                                  MediaQuery.of(
-                                                    context,
-                                                  ).size.width *
-                                                  0.7,
-                                              color: Theme.of(
-                                                context,
-                                              ).colorScheme.secondary,
-                                              child: Icon(
-                                                Icons.music_note,
-                                                size:
+                                        ? ValueListenableBuilder<Uint8List?>(
+                                            valueListenable:
+                                                provider.currentArtworkNotifier,
+                                            builder: (context, bytes, _) {
+                                              if (bytes != null) {
+                                                return Image.memory(
+                                                  bytes,
+                                                  width:
+                                                      MediaQuery.of(
+                                                        context,
+                                                      ).size.width *
+                                                      0.7,
+                                                  height:
+                                                      MediaQuery.of(
+                                                        context,
+                                                      ).size.width *
+                                                      0.7,
+                                                  fit: BoxFit.cover,
+                                                  gaplessPlayback: true,
+                                                );
+                                              }
+                                              return QueryArtworkWidget(
+                                                key: ValueKey(currentSong.id),
+                                                id: currentSong.id!,
+                                                type: ArtworkType.AUDIO,
+                                                artworkWidth:
                                                     MediaQuery.of(
                                                       context,
                                                     ).size.width *
-                                                    0.4,
-                                              ),
-                                            ),
+                                                    0.7,
+                                                artworkHeight:
+                                                    MediaQuery.of(
+                                                      context,
+                                                    ).size.width *
+                                                    0.7,
+                                                artworkFit: BoxFit.cover,
+                                                nullArtworkWidget: Container(
+                                                  width:
+                                                      MediaQuery.of(
+                                                        context,
+                                                      ).size.width *
+                                                      0.7,
+                                                  height:
+                                                      MediaQuery.of(
+                                                        context,
+                                                      ).size.width *
+                                                      0.7,
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.secondary,
+                                                  child: Icon(
+                                                    Icons.music_note,
+                                                    size:
+                                                        MediaQuery.of(
+                                                          context,
+                                                        ).size.width *
+                                                        0.4,
+                                                  ),
+                                                ),
+                                              );
+                                            },
                                           )
                                         : Image.asset(
                                             currentSong.albumArtImagePath ??
@@ -298,8 +322,9 @@ class _SongPageState extends State<SongPage> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               // start time
-                              Selector<PlaylistProvider, Duration>(
-                                selector: (_, p) => p.currentDuration,
+                              ValueListenableBuilder<Duration>(
+                                valueListenable:
+                                    provider.currentDurationNotifier,
                                 builder: (context, currentDuration, _) {
                                   return SizedBox(
                                     width: 45,
@@ -401,30 +426,33 @@ class _SongPageState extends State<SongPage> {
                               ),
 
                               // end time
-                              Selector<PlaylistProvider, (Duration, Duration)>(
-                                selector: (_, p) =>
-                                    (p.totalDuration, p.currentDuration),
-                                builder: (context, durations, _) {
-                                  final total = durations.$1;
-                                  final current = durations.$2;
-                                  return GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _showRemainingDuration =
-                                            !_showRemainingDuration;
-                                      });
-                                    },
-                                    child: SizedBox(
-                                      width: 45,
-                                      child: Text(
-                                        formatTime(
-                                          _showRemainingDuration
-                                              ? (current - total)
-                                              : total,
+                              Selector<PlaylistProvider, Duration>(
+                                selector: (_, p) => p.totalDuration,
+                                builder: (context, total, _) {
+                                  return ValueListenableBuilder<Duration>(
+                                    valueListenable:
+                                        provider.currentDurationNotifier,
+                                    builder: (context, current, _) {
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _showRemainingDuration =
+                                                !_showRemainingDuration;
+                                          });
+                                        },
+                                        child: SizedBox(
+                                          width: 45,
+                                          child: Text(
+                                            formatTime(
+                                              _showRemainingDuration
+                                                  ? (current - total)
+                                                  : total,
+                                            ),
+                                            textAlign: TextAlign.right,
+                                          ),
                                         ),
-                                        textAlign: TextAlign.right,
-                                      ),
-                                    ),
+                                      );
+                                    },
                                   );
                                 },
                               ),
@@ -432,37 +460,47 @@ class _SongPageState extends State<SongPage> {
                           ),
                         ),
 
-                        Selector<PlaylistProvider, (Duration, Duration)>(
-                          selector: (_, p) =>
-                              (p.currentDuration, p.totalDuration),
-                          builder: (context, durationData, _) {
-                            final currentDuration = durationData.$1;
-                            final totalDuration = durationData.$2;
-                            return SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 4,
-                                ),
-                              ),
-                              child: Slider(
-                                value: currentDuration.inSeconds
-                                    .toDouble()
-                                    .clamp(
-                                      0,
-                                      totalDuration.inSeconds.toDouble(),
+                        Selector<PlaylistProvider, Duration>(
+                          selector: (_, p) => p.totalDuration,
+                          builder: (context, totalDuration, _) {
+                            return ValueListenableBuilder<Duration>(
+                              valueListenable: provider.currentDurationNotifier,
+                              builder: (context, currentDuration, _) {
+                                return SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    thumbShape: const RoundSliderThumbShape(
+                                      enabledThumbRadius: 4,
                                     ),
-                                min: 0,
-                                max: totalDuration.inSeconds.toDouble(),
-                                activeColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                onChanged: (double val) {
-                                  provider.seek(Duration(seconds: val.toInt()));
-                                },
-                                onChangeEnd: (double val) {
-                                  provider.seek(Duration(seconds: val.toInt()));
-                                },
-                              ),
+                                  ),
+                                  child: Slider(
+                                    value: currentDuration.inSeconds
+                                        .toDouble()
+                                        .clamp(
+                                          0,
+                                          totalDuration.inSeconds > 0
+                                              ? totalDuration.inSeconds
+                                                    .toDouble()
+                                              : 0.0,
+                                        ),
+                                    min: 0,
+                                    max: totalDuration.inSeconds.toDouble() > 0
+                                        ? totalDuration.inSeconds.toDouble()
+                                        : 0.0,
+                                    activeColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                    onChanged: (value) {
+                                      // during when user is dragging the slider
+                                    },
+                                    onChangeEnd: (value) {
+                                      // when the user is done dragging the slider, go to that position in song
+                                      provider.seek(
+                                        Duration(seconds: value.toInt()),
+                                      );
+                                    },
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),

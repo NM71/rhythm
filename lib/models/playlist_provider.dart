@@ -9,6 +9,7 @@ import 'package:rhythm/models/playlist.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:rhythm/models/audio_handler.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:typed_data';
 
 enum SortType { title, artist, duration, dateAdded }
 
@@ -50,12 +51,23 @@ class PlaylistProvider extends ChangeNotifier {
 
   // Durations
   Duration _currentDuration = Duration.zero;
+  final ValueNotifier<Duration> _currentDurationNotifier = ValueNotifier(
+    Duration.zero,
+  );
+  ValueNotifier<Duration> get currentDurationNotifier =>
+      _currentDurationNotifier;
   Duration _totalDuration = Duration.zero;
 
   // Shuffle and Repeat states
   bool _isShuffle = false;
   bool _isRepeat = false;
   bool _isRepeatOne = false;
+
+  // Artwork Byte Cache for Gapless Transition
+  final ValueNotifier<Uint8List?> _currentArtworkNotifier =
+      ValueNotifier<Uint8List?>(null);
+  ValueNotifier<Uint8List?> get currentArtworkNotifier =>
+      _currentArtworkNotifier;
 
   // Hive Box Names
   static const String _favoritesBox = 'favorites_box';
@@ -188,6 +200,9 @@ class PlaylistProvider extends ChangeNotifier {
     final song = _queue[_currentQueueIndex!];
     _totalDuration = Duration(milliseconds: song.duration);
 
+    // Fetch artwork bytes for the restored song
+    _updateArtworkBytes();
+
     try {
       if (_audioHandler is MyAudioHandler) {
         final handler = _audioHandler;
@@ -247,6 +262,32 @@ class PlaylistProvider extends ChangeNotifier {
     cacheBox.put('lastQueue', _queue.map((s) => s.toMap()).toList());
     cacheBox.put('lastQueueIndex', _currentQueueIndex);
     cacheBox.put('lastPositionSeconds', _currentDuration.inSeconds);
+  }
+
+  Future<void> _updateArtworkBytes() async {
+    if (_currentQueueIndex == null || _queue.isEmpty) {
+      _currentArtworkNotifier.value = null;
+      return;
+    }
+
+    final song = _queue[_currentQueueIndex!];
+    if (!song.isLocal) {
+      _currentArtworkNotifier.value = null;
+      return;
+    }
+
+    try {
+      final bytes = await _audioQuery.queryArtwork(
+        song.id!,
+        ArtworkType.AUDIO,
+        format: ArtworkFormat.JPEG,
+        size: 500, // Reasonable size for SongPage
+      );
+      _currentArtworkNotifier.value = bytes;
+    } catch (e) {
+      debugPrint("Error fetching artwork bytes: $e");
+      _currentArtworkNotifier.value = null;
+    }
   }
 
   void _refreshCaches() {
@@ -356,8 +397,9 @@ class PlaylistProvider extends ChangeNotifier {
     final String path = song.audioPath;
 
     if (!resume) {
-      // Reset durations for the new song if not resuming
+      // Reset durations and fetch artwork for the new song if not resuming
       _currentDuration = Duration.zero;
+      _updateArtworkBytes();
     }
     _totalDuration = Duration(milliseconds: song.duration);
     notifyListeners();
@@ -508,12 +550,13 @@ class PlaylistProvider extends ChangeNotifier {
       final handler = _audioHandler;
       handler.positionStream.listen((position) {
         _currentDuration = position;
+        _currentDurationNotifier.value = position;
 
-        // Save position every 5 seconds to avoid excessive writes
-        if (position.inSeconds % 5 == 0) {
+        // Save position every 10 seconds to avoid excessive writes (increased from 5s)
+        if (position.inSeconds > 0 && position.inSeconds % 10 == 0) {
           _savePlaybackState();
         }
-        notifyListeners();
+        // notifyListeners() removed from here to prevent global UI lag
       });
     }
 
@@ -702,9 +745,7 @@ class PlaylistProvider extends ChangeNotifier {
         score += 100;
       } else if (title.contains(query)) {
         score += 50;
-      }
-
-      if (artist == query) {
+      } else if (artist == query) {
         score += 60;
       } else if (artist.contains(query)) {
         score += 30;
@@ -716,29 +757,20 @@ class PlaylistProvider extends ChangeNotifier {
         bool tokenMatched = false;
 
         // Title Token (Weight 1.0)
-        if (title.startsWith(token)) {
-          score += 20;
-          tokenMatched = true;
-        } else if (title.contains(token)) {
-          score += 10;
+        if (title.contains(token)) {
+          score += title.startsWith(token) ? 20 : 10;
           tokenMatched = true;
         }
 
         // Artist Token (Weight 0.8)
-        if (artist.startsWith(token)) {
-          score += 16;
-          tokenMatched = true;
-        } else if (artist.contains(token)) {
-          score += 8;
+        if (artist.contains(token)) {
+          score += artist.startsWith(token) ? 16 : 8;
           tokenMatched = true;
         }
 
         // Album Token (Weight 0.6)
-        if (album.startsWith(token)) {
-          score += 12;
-          tokenMatched = true;
-        } else if (album.contains(token)) {
-          score += 6;
+        if (album.contains(token)) {
+          score += album.startsWith(token) ? 12 : 6;
           tokenMatched = true;
         }
 
@@ -746,12 +778,12 @@ class PlaylistProvider extends ChangeNotifier {
       }
 
       // 3. Score weighting based on coverage
-      if (matchedTokens == 0) continue;
+      if (matchedTokens == 0 && score == 0) continue;
 
-      if (matchedTokens < queryTokens.length) {
+      if (matchedTokens > 0 && matchedTokens < queryTokens.length) {
         // Penalty for partial matches (missing some words)
         score *= (matchedTokens / queryTokens.length) * 0.5;
-      } else {
+      } else if (matchedTokens == queryTokens.length) {
         // Bonus for matching all words in the search
         score += 50;
       }
@@ -790,14 +822,13 @@ class PlaylistProvider extends ChangeNotifier {
       albumMap.putIfAbsent(song.albumName, () => []).add(song);
     }
     _cachedAlbums =
-        albumMap.entries
-            .map(
-              (e) => {'name': e.key, 'songs': e.value, 'count': e.value.length},
-            )
-            .toList()
-          ..sort(
-            (a, b) => (a['name'] as String).compareTo(b['name'] as String),
-          );
+        albumMap.entries.map((e) {
+          return {'name': e.key, 'songs': e.value, 'count': e.value.length};
+        }).toList()..sort(
+          (a, b) => (a['name'] as String).toLowerCase().compareTo(
+            (b['name'] as String).toLowerCase(),
+          ),
+        );
     return _cachedAlbums!;
   }
 
