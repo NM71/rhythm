@@ -1,4 +1,4 @@
-package com.example.rhythm
+package com.nosh.rhythm
 
 import io.flutter.embedding.android.FlutterActivity
 
